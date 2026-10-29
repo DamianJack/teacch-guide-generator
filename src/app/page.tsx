@@ -29,7 +29,7 @@ function exampleDraft(language: Language) {
     : ["Put the empty box on the table.", "Put 4 screws in the box.", "Put 4 washers in the box.", "Check the amounts.", "Close the box."];
   return { ...d, steps: steps.map(text => newStep(text)), title: de ? "Ein Materialset packen" : "Pack one materials kit",
     materials: [{ id: id(), name: de ? "Schachtel" : "Box", quantity: "1", unit: de ? "Stück" : "piece" }, { id: id(), name: de ? "Schraube" : "Screw", quantity: "4", unit: de ? "Stück" : "pieces" }, { id: id(), name: de ? "Unterlegscheibe" : "Washer", quantity: "4", unit: de ? "Stück" : "pieces" }],
-    notes: de ? "Stelle die leere Schachtel auf den Tisch. Lege 4 Schrauben hinein. Lege 4 Unterlegscheiben hinein. Prüfe die Mengen. Schließe die Schachtel." : "Put the empty box on the table. Put 4 screws in the box. Put 4 washers in the box. Check the amounts. Close the box." };
+    notes: "" };
 }
 
 export default function Home() {
@@ -196,7 +196,6 @@ export default function Home() {
       {area === 0 && <>
         <section className="task-fields"><div className="instruction-language" title={hasContent ? t.languageLocked : undefined}><label htmlFor="instruction-language">{t.language}</label><select id="instruction-language" value={draft.language} disabled={hasContent} onChange={e => edit({ language: e.target.value as Language })}><option value="en">English</option><option value="de">Deutsch</option></select></div>
           <SpeechField {...speechLanguage} label={t.title} maxLength={160} value={draft.title} onChange={value => edit({ title: value })} />
-          <SpeechField {...speechLanguage} label={t.notes} maxLength={5000} rows={3} value={draft.notes} onChange={value => edit({ notes: value })} />
 
         </section>
         <section className="photos-section"><div className="section-heading"><h2>{t.steps}</h2><span className="count">{draft.photos.length}/{LIMITS.photos} {t.photos}</span></div>
