@@ -3,8 +3,8 @@ import type { MetadataRoute } from "next";
 export default function manifest(): MetadataRoute.Manifest {
   return {
     id: "/",
-    name: "Klarblick",
-    short_name: "Klarblick",
+    name: "Visual Work Instructions",
+    short_name: "Work Instructions",
     description: "Create editable visual work instructions from workplace photos and notes.",
     start_url: "/",
     scope: "/",

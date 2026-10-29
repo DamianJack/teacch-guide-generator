@@ -1,4 +1,4 @@
-# Klarblick
+# Visual Guide
 
 A mobile-first PWA for trainers to turn workplace photos and task facts into editable visual work instructions. Scope: [PRD.md](PRD.md).
 

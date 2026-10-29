@@ -170,14 +170,14 @@ export default function Home() {
 
   return <div className="app-shell">
     <header className="topbar">
-      <button className="brand" onClick={() => setStarted(false)}><svg className="brand-icon" viewBox="0 0 100 100" aria-hidden="true"><circle cx="16" cy="22" r="9" fill="#005aaa" /><circle cx="16" cy="50" r="9" fill="#1c7f2a" /><circle cx="16" cy="78" r="9" fill="#91268f" /><rect x="38" y="26" width="54" height="54" rx="10" fill="none" stroke="#a3322e" strokeWidth="7" /><path d="M51 53l10 10 19-21" fill="none" stroke="#a3322e" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round" /></svg>{t.brand}</button>
+      <button className="brand" onClick={() => setStarted(false)}><span className="brand-icon" aria-hidden="true">▥</span>{t.brand}</button>
       <div className="top-actions">
         {!online && <span className="offline-status" role="status">{t.offline}</span>}
         <div className="language-toggle" role="group" aria-label={t.uiLanguage}>{(["en", "de"] as const).map(l => <button key={l} type="button" aria-pressed={language === l} onClick={() => setLanguage(l)}>{l.toUpperCase()}</button>)}</div>
       </div>
     </header>
     {!ready ? <main className="welcome"><p role="status">{t.loading}</p></main> : !started || !draft ? <main className="welcome">
-      <svg className="welcome-symbol" viewBox="0 0 100 100" aria-hidden="true"><circle cx="16" cy="22" r="9" fill="#005aaa" /><circle cx="16" cy="50" r="9" fill="#1c7f2a" /><circle cx="16" cy="78" r="9" fill="#91268f" /><rect x="38" y="26" width="54" height="54" rx="10" fill="none" stroke="#a3322e" strokeWidth="7" /><path d="M51 53l10 10 19-21" fill="none" stroke="#a3322e" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round" /></svg>
+      <div className="welcome-symbol" aria-hidden="true">▧</div>
       <h1>{t.welcome}</h1>
       {loadError && <div className="alert" role="alert">{t.loadError}<button onClick={() => { setReady(false); setRetry(n => n + 1); }}>{t.retry}</button></div>}
       <div className="welcome-actions">
