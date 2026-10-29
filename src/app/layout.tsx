@@ -3,14 +3,14 @@ import { SerwistProvider } from "@serwist/next/react";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Visual Work Instructions",
+  title: "Visual Guide · Work instructions",
   description: "Create editable visual work instructions from workplace photos and notes.",
   applicationName: "Visual Work Instructions",
   icons: { apple: "/icons/icon-192.png" },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0f172a",
+  themeColor: "#245d49",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

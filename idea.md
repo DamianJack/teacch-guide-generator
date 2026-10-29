@@ -1,5 +1,7 @@
 # AI Visual Work Instruction Creator
 
+> Earlier planning notes. [PRD.md](PRD.md) is the current source of truth for MVP requirements, acceptance checks, and later scope. Retain this document as background; its planning statements do not describe completed functionality.
+
 ## 1. Challenge and purpose
 
 Caritas-Don Bosco / BBW Würzburg supports young people with autism, mental health conditions, and learning support needs as they prepare for working life.
@@ -240,6 +242,6 @@ For the hackathon, the exported PDF can be uploaded to Moodle as a File resource
 
 ## 14. Current status
 
-The feature scope and broad UI direction reflect our discussion. The stack above is the recommendation for review.
+The project foundation has been implemented and pushed to GitHub. It includes Next.js, Tailwind, the PWA manifest and shell caching, a serverless health endpoint, dependencies, and basic checks.
 
-Implementation, deployment, model calls, Android checks, and learner usability evaluation have not been performed. Official branding assets and the initial model configuration remain implementation inputs.
+The product workflow, local draft/photo persistence, bilingual content, AI requests, approval, PDF export, deployment, Android checks, and learner usability evaluation remain unimplemented or unverified. See [PRD.md](PRD.md) for the current requirements and remaining inputs.
