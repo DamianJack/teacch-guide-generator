@@ -7,9 +7,9 @@ import "./globals.css";
 const sourceSans = Source_Sans_3({ subsets: ["latin"], variable: "--f-source" });
 
 export const metadata: Metadata = {
-  title: "Visual Guide · Work instructions",
+  title: "Klarblick · Work instructions",
   description: "Create editable visual work instructions from workplace photos and notes.",
-  applicationName: "Visual Work Instructions",
+  applicationName: "Klarblick",
   icons: { apple: "/icons/icon-192.png" },
 };
 
