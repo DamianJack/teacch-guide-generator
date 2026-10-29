@@ -15,7 +15,7 @@ const styles = StyleSheet.create({
 export function GuideDocument({ draft, images }: { draft: Draft; images: Record<string, string> }) {
   const h = headings[draft.language];
   const footer = <Text fixed style={styles.footer} render={({ pageNumber, totalPages }) => `${h.page} ${pageNumber} / ${totalPages}`} />;
-  return <Document title={draft.title} language={draft.language} author="Visual Guide">
+  return <Document title={draft.title} language={draft.language} author="Klarblick">
     {(!!draft.title.trim() || showMaterials(draft)) && <Page size="A4" style={styles.page}>
       {!!draft.title.trim() && <><Text style={styles.eyebrow}>{h.goal}</Text><Text style={styles.title}>{draft.title}</Text></>}
       {showMaterials(draft) && <><Text style={styles.heading} minPresenceAhead={50}>{h.materials}</Text>

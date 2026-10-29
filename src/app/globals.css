@@ -34,8 +34,7 @@ h3,h4 { font-size: 16px; font-weight: 650; }
   background: linear-gradient(90deg, var(--primary) 0 34%, var(--blue) 34% 51%, var(--green) 51% 68%, var(--purple) 68% 84%, var(--orange) 84%) bottom / 100% 4px no-repeat, var(--surface); }
 .brand { display: flex; align-items: center; gap: 10px; font-size: 18px; font-weight: 700; border: 0; padding: 0; background: transparent; }
 .brand:hover:not(:disabled) { background: transparent; }
-.brand-icon { width: 30px; height: 30px; border-radius: 4px; font-size: 0;
-  background: linear-gradient(90deg, var(--blue) 0 46%, transparent 46% 54%, var(--green) 54%) top / 100% 46% no-repeat, linear-gradient(90deg, var(--purple) 0 46%, transparent 46% 54%, var(--orange) 54%) bottom / 100% 46% no-repeat; }
+.brand-icon { width: 32px; height: 32px; flex-shrink: 0; }
 .top-actions { display: flex; align-items: center; gap: 8px; }
 .offline-status { font-size: 12px; font-weight: 600; color: var(--warn-ink); background: var(--warn-bg); padding: 4px 10px; border-radius: 999px; }
 .language-toggle { display: flex; padding: 3px; gap: 2px; border-radius: 8px; background: var(--soft); }
@@ -44,10 +43,7 @@ h3,h4 { font-size: 16px; font-weight: 650; }
 
 /* Start screen */
 .welcome { max-width: 440px; margin: auto; padding: 32px 24px 36px; }
-.welcome-symbol { position: relative; width: 92px; height: 80px; margin-bottom: 32px; font-size: 0; }
-.welcome-symbol::before, .welcome-symbol::after { content: ""; position: absolute; left: 0; width: 92px; height: 36px; }
-.welcome-symbol::before { top: 0; background: linear-gradient(90deg, var(--blue) 0 47%, transparent 47% 53%, var(--green) 53%); }
-.welcome-symbol::after { top: 44px; background: linear-gradient(90deg, var(--purple) 0 47%, transparent 47% 53%, var(--orange) 53%); }
+.welcome-symbol { display: block; width: 88px; height: 88px; margin-bottom: 28px; }
 .welcome h1 { display: inline; font-size: 40px; line-height: 1.32; background: var(--accent); box-shadow: inset 4px 0 0 var(--primary); padding: 2px 12px 2px 16px; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
 .welcome-actions { display: flex; flex-direction: column; gap: 12px; margin: 36px 0 28px; }
 .welcome-actions .primary,.welcome-actions .secondary { justify-content: space-between; width: 100%; min-height: 58px; padding-inline: 20px; font-size: 16px; }
