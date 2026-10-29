@@ -3,7 +3,7 @@
 /* eslint-disable react-hooks/set-state-in-effect -- Initialize browser preferences and manage object URL lifetimes after hydration. */
 
 import { useEffect, useRef, useState } from "react";
-import { approvalIssues, listedMaterials, showMaterials, editDraft, generationSchema, headings, id, LIMITS, move, newDraft, newStep, photosInStepOrder, reviewSchema, sameRevision, usedPhotos, type Draft, type Language, type Step } from "../lib/guide";
+import { approvalIssues, listedMaterials, showMaterials, editDraft, generationSchema, headings, id, LIMITS, move, newDraft, newStep, photosInStepOrder, sameRevision, usedPhotos, type Draft, type Language, type Step } from "../lib/guide";
 import { dataUrl, loadDraft, preparePhoto, saveDraft } from "../lib/storage";
 import { copy } from "../lib/copy";
 import { SpeechField } from "../components/speech-field";
@@ -21,10 +21,7 @@ function exampleDraft(language: Language) {
     : ["Put the empty box on the table.", "Put 4 screws in the box.", "Put 4 washers in the box.", "Check the amounts.", "Close the box."];
   return { ...d, steps: steps.map(text => newStep(text)), title: de ? "Ein Materialset packen" : "Pack one materials kit",
     materials: [{ id: id(), name: de ? "Schachtel" : "Box", quantity: "1", unit: de ? "Stück" : "piece" }, { id: id(), name: de ? "Schraube" : "Screw", quantity: "4", unit: de ? "Stück" : "pieces" }, { id: id(), name: de ? "Unterlegscheibe" : "Washer", quantity: "4", unit: de ? "Stück" : "pieces" }],
-    notes: de ? "Stelle die leere Schachtel auf den Tisch. Lege 4 Schrauben hinein. Lege 4 Unterlegscheiben hinein. Prüfe die Mengen. Schließe die Schachtel." : "Put the empty box on the table. Put 4 screws in the box. Put 4 washers in the box. Check the amounts. Close the box.",
-    finished: de ? "Die geschlossene Schachtel enthält 4 Schrauben und 4 Unterlegscheiben." : "The closed box contains 4 screws and 4 washers.",
-    next: de ? "Lege die Schachtel in die Ablage für fertige Sets." : "Put the box in the finished-kits tray.",
-    help: de ? "Wenn etwas fehlt oder unklar ist, frage die Fachkraft." : "If anything is missing or unclear, ask your trainer." };
+    notes: de ? "Stelle die leere Schachtel auf den Tisch. Lege 4 Schrauben hinein. Lege 4 Unterlegscheiben hinein. Prüfe die Mengen. Schließe die Schachtel." : "Put the empty box on the table. Put 4 screws in the box. Put 4 washers in the box. Check the amounts. Close the box." };
 }
 
 export default function Home() {
@@ -34,7 +31,7 @@ export default function Home() {
   const [started, setStarted] = useState(false); const [area, setArea] = useState(0);
   const [saveState, setSaveState] = useState<"saved" | "saving" | "unsaved">("saved");
   const [retry, setRetry] = useState(0); const saveQueue = useRef(Promise.resolve()); const saveVersion = useRef(0);
-  const [online, setOnline] = useState(true); const [busy, setBusy] = useState<"generate" | "check" | null>(null); const requestBusy = useRef(false);
+  const [online, setOnline] = useState(true); const [busy, setBusy] = useState(false); const requestBusy = useRef(false);
   const [message, setMessage] = useState<Message | null>(null);
   const [manual, setManual] = useState(false);
   const [exporting, setExporting] = useState(false); const [photoBusy, setPhotoBusy] = useState(false);
@@ -106,43 +103,33 @@ export default function Home() {
       edit({ photos: [...latest.photos, ...prepared], steps: latest.steps.map(s => s.id === stepId ? { ...s, photoIds: [...s.photoIds, ...prepared.map(p => p.id)] } : s) });
     } catch { setMessage("imageError"); } finally { setPhotoBusy(false); }
   }
-  async function ai(mode: "generate" | "check") {
+  async function generate() {
     const snapshot = current.current;
     if (!snapshot || requestBusy.current || !snapshot.photos.length) return;
     if (!navigator.onLine) { setMessage("offlineAI"); return; }
-    // On the Create screen step text is the trainer's input for the AI; afterwards it is edited guide text worth protecting.
-    if (mode === "generate" && area !== 0 && snapshot.steps.some(s => s.text.trim()) && !window.confirm(t.regenerateConfirm)) return;
-    requestBusy.current = true; setBusy(mode); setMessage(null);
+    requestBusy.current = true; setBusy(true); setMessage(null);
     try {
       const photoData = await Promise.all(photosInStepOrder(snapshot).map(async p => ({ id: p.id, data: await dataUrl(p.blob) })));
-      const { language, title, notes, materials, noMaterials, finished, next, help } = snapshot;
-      const body = JSON.stringify({ facts: { language, title, notes, materials, noMaterials, finished, next, help }, photos: photoData, steps: snapshot.steps });
+      const { language, title, notes, materials, noMaterials } = snapshot;
+      const body = JSON.stringify({ facts: { language, title, notes, materials, noMaterials }, photos: photoData, steps: snapshot.steps });
       if (new Blob([body]).size > LIMITS.requestBytes) { setMessage("limitError"); return; }
-      const response = await fetch(`/api/${mode}`, { method: "POST", headers: { "Content-Type": "application/json" }, body, signal: AbortSignal.timeout(65_000) });
+      const response = await fetch("/api/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body, signal: AbortSignal.timeout(65_000) });
       const result = await response.json();
       if (!response.ok) { setMessage(result.error === "configuration" ? "configured" : result.error === "limit" ? "limitError" : "aiError"); return; }
       if (!current.current || !sameRevision(current.current, snapshot)) { setMessage("staleResponse"); return; }
-      if (mode === "generate") {
-        const generated = generationSchema.parse(result);
-        if (generated.steps.some(g => !snapshot.steps.some(s => s.id === g.stepId))) throw new Error("step");
-        const texts = new Map(generated.steps.map(g => [g.stepId, g.text.trim()]));
-        store(editDraft(snapshot, { ...generated, steps: snapshot.steps.map(s => ({ ...s, text: texts.get(s.id) || s.text })), review: null }));
-        navigate(1);
-      } else {
-        const checked = reviewSchema.parse(result);
-        store({ ...snapshot, review: { revision: snapshot.revision, suggestions: checked.suggestions.map(s => ({ ...s, dismissed: false })) } }, false);
-      }
-    } catch { setMessage("aiError"); } finally { requestBusy.current = false; setBusy(null); }
+      const generated = generationSchema.parse(result);
+      if (generated.steps.some(g => !snapshot.steps.some(s => s.id === g.stepId))) throw new Error("step");
+      const texts = new Map(generated.steps.map(g => [g.stepId, g.text.trim()]));
+      store(editDraft(snapshot, { steps: snapshot.steps.map(s => ({ ...s, text: texts.get(s.id) || s.text })) }));
+      navigate(1);
+    } catch { setMessage("aiError"); } finally { requestBusy.current = false; setBusy(false); }
   }
   const issueLabels = { steps: t.noSteps, stepContent: t.stepContent };
   const issues = draft ? approvalIssues(draft) : [];
   const approved = !!draft && draft.approvedRevision === draft.revision;
   const h = headings[draft?.language ?? "en"];
-  const hasContent = !!draft && (!!draft.title || !!draft.notes || !!draft.materials.length || draft.steps.some(s => !!s.text || !!s.photoIds.length) || !!draft.finished || !!draft.next || !!draft.help || draft.noMaterials);
+  const hasContent = !!draft && (!!draft.title || !!draft.notes || !!draft.materials.length || draft.steps.some(s => !!s.text || !!s.photoIds.length) || draft.noMaterials);
   const speechLanguage = { language: draft?.language ?? "en", uiLanguage: language };
-  function completionFields() {
-    return <div className="completion-fields">{(["finished", "next", "help"] as const).map(field => <SpeechField {...speechLanguage} key={field} label={t[field]} maxLength={1000} rows={2} value={draft![field]} onChange={value => edit({ [field]: value })} />)}</div>;
-  }
   function stepCard(s: Step, index: number, capture: boolean) {
     const label = `${t.step} ${index + 1}`; const full = photoBusy || draft!.photos.length >= LIMITS.photos;
     return <article className="step-editor" id={`step-${s.id}`} key={s.id}>
@@ -163,7 +150,7 @@ export default function Home() {
     return <><button type="button" disabled={index === 0} onClick={() => edit({ steps: move(draft!.steps, index, -1) })} aria-label={`${t.up}: ${t.step} ${index + 1}`}>↑</button><button type="button" disabled={index === draft!.steps.length - 1} onClick={() => edit({ steps: move(draft!.steps, index, 1) })} aria-label={`${t.down}: ${t.step} ${index + 1}`}>↓</button></>;
   }
 
-  const aiDisabled = !online || !!busy || photoBusy || !draft?.photos.length;
+  const aiDisabled = !online || busy || photoBusy || !draft?.photos.length;
   const canApprove = !issues.length && manual && !photoBusy && !busy;
   async function exportPDF() {
     setExporting(true); setMessage(null);
@@ -218,7 +205,6 @@ export default function Home() {
             <SpeechField {...speechLanguage} label={t.quantity} value={m.quantity} maxLength={40} onChange={value => edit({ materials: draft.materials.map(x => x.id === m.id ? { ...x, quantity: value } : x) })} />
             <SpeechField {...speechLanguage} label={t.unit} value={m.unit} maxLength={40} onChange={value => edit({ materials: draft.materials.map(x => x.id === m.id ? { ...x, unit: value } : x) })} />
           </div>)}</div><button className="secondary compact" disabled={draft.materials.length >= 24} onClick={() => edit({ materials: [...draft.materials, { id: id(), name: "", quantity: "", unit: "" }] })}>＋ {t.addMaterial}</button></>}
-          {completionFields()}
         </div></details>
 
       </>}
@@ -226,18 +212,12 @@ export default function Home() {
         <div className="section-heading"><h2>{t.steps}</h2><span className="count">{draft.steps.length}</span></div>
         {draft.steps.map((s, index) => stepCard(s, index, false))}
         <button className="secondary full-width" disabled={draft.steps.length >= LIMITS.steps} onClick={() => addStep()}>＋ {t.addStep}</button>
-        <details className="task-details"><summary>{t.completion}</summary><div className="details-content">{completionFields()}</div></details>
-        <details className="ai-tools"><summary><span>{t.check}</span><span className="detail-status">{draft.review && draft.review.revision === draft.revision ? "✓" : ""}</span></summary><div className="details-content">
-          {draft.review && (draft.review.revision !== draft.revision ? <p className="stale-note">{t.staleCheck}</p> : <div className="check-results"><strong className="check-success">✓ {t.checked}</strong>{draft.review.suggestions.map((s, index) => <div className={`suggestion ${s.dismissed ? "dismissed" : ""}`} key={index}><b>{draft.steps.findIndex(step => step.id === s.target) >= 0 ? `${t.step} ${draft.steps.findIndex(step => step.id === s.target) + 1}` : t[s.target as "title" | "materials" | "finished" | "next" | "help"]}</b><p>{s.issue}</p><button className="text-button" disabled={s.dismissed} onClick={() => store({ ...draft, review: { ...draft.review!, suggestions: draft.review!.suggestions.map((item, i) => i === index ? { ...item, dismissed: true } : item) } }, false)}>{s.dismissed ? t.dismissed : t.dismiss}</button></div>)}</div>)}
-          <div className="button-row"><button className="secondary" disabled={aiDisabled || !draft.steps.length} onClick={() => void ai("check")}>{busy === "check" ? t.checking : t.check}</button><button className="text-button" disabled={aiDisabled} onClick={() => void ai("generate")}>{t.regenerate}</button></div>
-        </div></details>
       </>}
-      {busy && <p className="request-status" role="status">{busy === "generate" ? t.generating : t.checking}</p>}
+      {busy && <p className="request-status" role="status">{t.generating}</p>}
       {area === 2 && <>
         <article className="learner-preview" lang={draft.language}>
           {draft.title.trim() && <h2>{draft.title}</h2>}{showMaterials(draft) && <section><h3>{h.materials}</h3>{draft.noMaterials ? <p>{h.none}</p> : <ul className="learner-materials">{listedMaterials(draft).map(m => <li key={m.id}><b>{m.quantity} {m.unit}</b> {m.name}</li>)}</ul>}</section>}
           <section><h3>{h.steps}</h3>{draft.steps.map((s, index) => <div className="learner-step" key={s.id}><h4><span>{index + 1}</span>{h.step} {index + 1}</h4>{s.photoIds.length > 0 && <div className={`learner-photos ${s.photoIds.length > 1 ? "multiple" : ""}`}>{s.photoIds.filter(pid => urls[pid]).map((pid, pi) => <img key={pid} src={urls[pid]} alt={`${h.step} ${index + 1}, ${pi + 1}`} />)}</div>}{s.text.trim() && <p>{s.text}</p>}</div>)}</section>
-          <div className="learner-completion">{(["finished", "next", "help"] as const).filter(field => draft[field].trim()).map(field => <section key={field}><h3>{h[field]}</h3><p>{draft[field]}</p></section>)}</div>
         </article>
         <section className="approval-panel">
           {issues.length > 0 && <div className="validation"><strong>{t.missing}</strong><ul>{issues.map(issue => <li key={issue}>{issueLabels[issue as keyof typeof issueLabels]}</li>)}</ul><button className="text-button" onClick={() => navigate(0)}>{t.fixMissing} →</button></div>}
@@ -247,7 +227,7 @@ export default function Home() {
       </>}
       <details className="draft-options"><summary>{t.draftOptions}</summary><p>{t.local}</p><button className="text-button danger" disabled={photoBusy} onClick={() => begin()}>{t.new}</button></details>
       <div className="action-dock">
-        {area === 0 ? <><button className="text-button" onClick={() => navigate(1)}>{t.manualEdit}</button><button className="primary" disabled={aiDisabled} onClick={() => void ai("generate")}>{busy === "generate" ? t.generating : t.generate}<span aria-hidden="true">→</span></button></> : area === 1 ? <><button className="text-button" onClick={() => navigate(0)}>← {t.back}</button><button className="primary" onClick={() => navigate(2)}>{t.preview} <span aria-hidden="true">→</span></button></> : <><button className="text-button" onClick={() => navigate(1)}>← {t.edit}</button>{approved ? <button className="primary" disabled={exporting || saveState !== "saved"} onClick={() => void exportPDF()}>{exporting ? t.exporting : t.download}<span aria-hidden="true">↓</span></button> : <button className="primary" disabled={!canApprove} onClick={() => { const latest = current.current; if (latest && !approvalIssues(latest).length) store({ ...latest, approvedRevision: latest.revision }, false); }}>{t.approve} <span aria-hidden="true">✓</span></button>}</>}
+        {area === 0 ? <><button className="text-button" onClick={() => navigate(1)}>{t.manualEdit}</button><button className="primary" disabled={aiDisabled} onClick={() => void generate()}>{busy ? t.generating : t.generate}<span aria-hidden="true">→</span></button></> : area === 1 ? <><button className="text-button" onClick={() => navigate(0)}>← {t.back}</button><button className="primary" onClick={() => navigate(2)}>{t.preview} <span aria-hidden="true">→</span></button></> : <><button className="text-button" onClick={() => navigate(1)}>← {t.edit}</button>{approved ? <button className="primary" disabled={exporting || saveState !== "saved"} onClick={() => void exportPDF()}>{exporting ? t.exporting : t.download}<span aria-hidden="true">↓</span></button> : <button className="primary" disabled={!canApprove} onClick={() => { const latest = current.current; if (latest && !approvalIssues(latest).length) store({ ...latest, approvedRevision: latest.revision }, false); }}>{t.approve} <span aria-hidden="true">✓</span></button>}</>}
       </div>
     </main>}
     {viewPhoto && urls[viewPhoto] && <PhotoDialog src={urls[viewPhoto]} alt={draft?.photos.find(p => p.id === viewPhoto)?.name ?? t.photo} label={t.close} close={() => setViewPhoto(null)} />}

@@ -11,7 +11,7 @@ npm ci
 npm run dev
 ```
 
-Open http://localhost:3000. Manual authoring works without AI credentials. To enable generation and quality checking, copy `.env.example` to `.env.local`, set `FIREWORKS_API_KEY`, and restart the server. `AI_MODEL` is set to `accounts/fireworks/models/deepseek-v4p1-flash` (DeepSeek V4.1 Flash). Keep both settings server-only. The model must accept photos and structured JSON outputs; use its exact Fireworks model ID.
+Open http://localhost:3000. Manual authoring works without AI credentials. To enable step generation, copy `.env.example` to `.env.local`, set `FIREWORKS_API_KEY`, and restart the server. `AI_MODEL` is set to `accounts/fireworks/models/deepseek-v4p1-flash` (DeepSeek V4.1 Flash). Keep both settings server-only. The model must accept photos and structured JSON outputs; use its exact Fireworks model ID.
 
 For optional voice input, also set the server-only `ELEVENLABS_API_KEY` with Speech to Text (`speech_to_text`) permission and restart. A mic button on each text field opens a recording sheet: record, stop and transcribe, review/edit the transcript, then add it to the field. New speech appends to the latest field text; it never silently replaces text or truncates it to fit. Adding it uses the same draft-save and approval-invalidation path as typing.
 
@@ -21,15 +21,15 @@ Audio exists temporarily in memory and is sent only on an explicit transcription
 
 ## Workflow
 
-1. Create: enter a task and procedure, take/select photos, and expand **Materials & finish** for quantities, completion, next action and help. Choose the instruction language before entering content.
-2. Edit: create steps with AI or add them manually. Edit text and photo associations, split, remove and reorder steps. Expand **AI check** for separate advisory suggestions. Answer factual questions and incorporate the answers into learner text.
-3. Preview: inspect the entire guide, explicitly approve the current revision, then download its A4 PDF. Content changes revoke approval; changing interface language preserves it.
+1. Create: capture the task step by step. Each step card takes one or more photos (camera or gallery) and an optional note; tap **＋ Add step** for the next one. Optionally add a task title, notes and **Materials**. Choose the instruction language before entering content. **Create steps** turns each step's photos into one TEACCH-style learner action.
+2. Edit: rewrite step text, add or remove photos, split, remove and reorder steps.
+3. Preview: inspect the entire guide, explicitly approve the current revision, then download its A4 PDF. Approval only requires a photo for every step; empty optional sections are left out. Content changes revoke approval; changing interface language preserves it.
 
 The English/German interface is separate from the instruction language. The labeled example is illustrative practice content; it requires real kit photos and trainer verification. It is not a prerecorded AI result.
 
 One draft, including resized photo blobs, is stored atomically in IndexedDB using Dexie. Failed writes show **Not saved** and preserve the previous successful save. Browser/site data deletion removes the draft; there is no cloud backup. No photos or tasks are sent in the background. Explicit AI requests send the task and selected photos to Fireworks. Provider retention policies apply. Do not use identifiable participant data.
 
-Generation and quality checking use Fireworks' Chat Completions API with image data URLs and a JSON schema. Responses are validated again on the server, including photo and step references. Incomplete responses and provider errors leave the current draft intact. No client-side provider keys or raw task/photo logging are used.
+Step generation uses Fireworks' Chat Completions API with image data URLs and a JSON schema. Responses are validated again on the server, including step references; failures are logged server-side with their cause. Incomplete responses and provider errors leave the current draft intact. No client-side provider keys or raw task/photo logging are used.
 
 Image input: JPEG, PNG or WebP, at most 12 MB / 40 megapixels each, 12 photos total. Images are resized to at most 1280 pixels and compressed to at most 160 KB JPEG each. The server accepts at most 3.5 MB per request and validates input, output and photo references. Instructions support 24 materials and 24 steps. Verify these limits with the actual demo photos before presenting.
 

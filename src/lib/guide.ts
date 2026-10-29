@@ -7,7 +7,6 @@ export const stepSchema = z.object({ id: z.string().min(1).max(80), text: z.stri
 export const factsSchema = z.object({
   language: z.enum(["en", "de"]), title: z.string().max(160), notes: z.string().max(5000),
   materials: z.array(materialSchema).max(24), noMaterials: z.boolean(),
-  finished: z.string().max(1000), next: z.string().max(1000), help: z.string().max(1000),
 });
 export const aiRequestSchema = z.object({
   facts: factsSchema, steps: z.array(stepSchema).max(LIMITS.steps),
@@ -15,10 +14,6 @@ export const aiRequestSchema = z.object({
 });
 export const generationSchema = z.object({
   steps: z.array(z.object({ stepId: z.string().min(1).max(80), text: z.string().max(600) })).min(1).max(LIMITS.steps),
-  finished: z.string().max(1000), next: z.string().max(1000), help: z.string().max(1000),
-});
-export const reviewSchema = z.object({
-  suggestions: z.array(z.object({ target: z.string().min(1).max(80), issue: z.string().min(1).max(500) })).max(30),
 });
 export type Facts = z.infer<typeof factsSchema>;
 export type Step = z.infer<typeof stepSchema>;
@@ -26,13 +21,12 @@ export type Photo = { id: string; name: string; blob: Blob };
 export type Draft = Facts & {
   id: string; revision: number; example: boolean; photos: Photo[]; steps: Step[];
   approvedRevision: number | null;
-  review: { revision: number; suggestions: { target: string; issue: string; dismissed: boolean }[] } | null;
 };
 export const id = () => crypto.randomUUID();
 export const newStep = (text = ""): Step => ({ id: id(), text, photoIds: [] });
 export function newDraft(language: Language = "en"): Draft {
   return { id: id(), revision: 0, example: false, language, title: "", notes: "", materials: [], noMaterials: false,
-    finished: "", next: "", help: "", photos: [], steps: [newStep()], approvedRevision: null, review: null };
+    photos: [], steps: [newStep()], approvedRevision: null };
 }
 // Photos belong to steps; drop any photo no step uses so the shared store never holds hidden images.
 export function usedPhotos(photos: Photo[], steps: Step[]) {
@@ -72,6 +66,6 @@ export function approvalIssues(d: Draft): string[] {
 export const listedMaterials = (d: Draft) => d.materials.filter(m => m.name.trim());
 export const showMaterials = (d: Draft) => d.noMaterials || listedMaterials(d).length > 0;
 export const headings = {
-  en: { goal: "Your task", materials: "What you need", steps: "What to do", finished: "You are finished when", next: "What happens next", help: "Need help?", none: "No materials needed", step: "Step", page: "Page" },
-  de: { goal: "Deine Aufgabe", materials: "Das brauchst du", steps: "Das machst du", finished: "Du bist fertig, wenn", next: "Danach", help: "Brauchst du Hilfe?", none: "Kein Material nötig", step: "Schritt", page: "Seite" },
+  en: { goal: "Your task", materials: "What you need", steps: "What to do", none: "No materials needed", step: "Step", page: "Page" },
+  de: { goal: "Deine Aufgabe", materials: "Das brauchst du", steps: "Das machst du", none: "Kein Material nötig", step: "Schritt", page: "Seite" },
 };

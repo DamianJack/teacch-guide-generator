@@ -14,7 +14,6 @@ const styles = StyleSheet.create({
 });
 export function GuideDocument({ draft, images }: { draft: Draft; images: Record<string, string> }) {
   const h = headings[draft.language];
-  const completion = (["finished", "next", "help"] as const).filter(field => draft[field].trim());
   const footer = <Text fixed style={styles.footer} render={({ pageNumber, totalPages }) => `${h.page} ${pageNumber} / ${totalPages}`} />;
   return <Document title={draft.title} language={draft.language} author="Visual Guide">
     {(!!draft.title.trim() || showMaterials(draft)) && <Page size="A4" style={styles.page}>
@@ -28,9 +27,6 @@ export function GuideDocument({ draft, images }: { draft: Draft; images: Record<
         : <View style={styles.images}>{s.photoIds.map(pid => <Image key={pid} src={images[pid]} style={styles.gridImage} />)}</View>}
       {!!s.text.trim() && <Text style={styles.action}>{s.text}</Text>}{footer}
     </Page>)}
-    {completion.length > 0 && <Page size="A4" style={styles.page}>
-      {completion.map(field => <View key={field}><Text style={styles.heading} minPresenceAhead={60}>{h[field]}</Text><Text>{draft[field]}</Text></View>)}{footer}
-    </Page>}
   </Document>;
 }
 export async function downloadGuide(draft: Draft) {
