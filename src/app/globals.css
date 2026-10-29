@@ -11,7 +11,6 @@ button:disabled, select:disabled, .file-button:has(input:disabled) { opacity: .5
 :focus-visible { outline: 3px solid #aa731c; outline-offset: 3px; }
 input:not([type=checkbox]), textarea, select { width: 100%; min-height: 50px; padding: 12px; border: 1px solid #cbd6cd; border-radius: 10px; background: white; color: var(--ink); font-size: 16px; }
 textarea { resize: vertical; min-height: 78px; }
-input::placeholder, textarea::placeholder { color: #707b73; }
 input[type=checkbox] { width: 21px; height: 21px; accent-color: var(--green); flex-shrink: 0; margin: 1px 0 0; }
 h1,h2,h3,h4,p { margin: 0; }
 h1 { font-size: 27px; letter-spacing: -.8px; line-height: 1.2; font-weight: 650; }
@@ -26,9 +25,7 @@ h3,h4 { font-size: 16px; font-weight: 600; }
 .language-control select { width: 66px; min-height: 44px; padding: 8px; font-size: 13px; background: transparent; }
 .welcome { max-width: 440px; margin: auto; padding: 60px 24px 36px; }
 .welcome-symbol { display: grid; place-items: center; width: 78px; height: 88px; border-radius: 16px; border: 1px solid #cbd9bf; background: #edf3e5; color: #3b6547; font-size: 42px; margin-bottom: 30px; }
-.welcome-symbol span { font-size: 10px; letter-spacing: 3px; margin-top: -12px; }
 .welcome h1 { font-size: 36px; line-height: 1.15; max-width: 310px; }
-.lead { color: var(--muted); font-size: 16px; line-height: 1.65; margin-top: 17px; max-width: 300px; }
 .welcome-actions { display: flex; flex-direction: column; gap: 12px; margin: 32px 0 28px; }
 .welcome-actions .primary,.welcome-actions .secondary { justify-content: space-between; width: 100%; }
 .welcome-actions>.text-button { text-align: center; }
@@ -49,11 +46,9 @@ h3,h4 { font-size: 16px; font-weight: 600; }
 .save-status { display: flex; gap: 10px; align-items: center; font-size: 11px; color: var(--muted); margin-top: 8px; min-height: 18px; }
 .save-status .text-button { min-height: 24px; padding: 0; font-size: 11px; }
 .field { display: flex; flex-direction: column; gap: 8px; margin-bottom: 21px; min-width: 0; font-size: 14px; font-weight: 600; }
-.field small { font-size: 12px; font-weight: 400; color: var(--muted); }
 .field input,.field textarea,.field select { font-weight: 400; }
 .instruction-language { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; margin: -2px 0 26px; font-size: 12px; color: var(--muted); }
 .instruction-language select { width: 117px; min-height: 44px; padding: 8px; font-size: 13px; background: transparent; }
-.instruction-language .hint { flex-basis: 100%; margin: 0; font-size: 11px; }
 .section-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 14px; }
 .count { color: var(--muted); font-size: 12px; }
 .photo-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
@@ -74,10 +69,6 @@ h3,h4 { font-size: 16px; font-weight: 600; }
 .file-button { position: relative; display: inline-flex; align-items: center; overflow: hidden; }
 .file-button input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
 .file-button:focus-within { outline: 3px solid #aa731c; outline-offset: 3px; }
-.hint { font-size: 12px; color: var(--muted); line-height: 1.6; margin: 12px 0 0; }
-.help-details { margin: 3px 0 22px; color: var(--muted); font-size: 12px; }
-.help-details summary { padding: 12px 0; min-height: 44px; }
-.help-details p { padding-bottom: 12px; line-height: 1.7; }
 .task-details,.ai-tools { margin: 22px 0; border: 1px solid var(--line); border-radius: 12px; background: white; }
 .task-details>summary,.ai-tools>summary { position: relative; display: flex; justify-content: space-between; gap: 15px; list-style: none; padding: 18px 36px 18px 16px; font-size: 14px; font-weight: 600; min-height: 58px; }
 .task-details>summary::after,.ai-tools>summary::after { content: "+"; position: absolute; right: 16px; font-size: 18px; line-height: 1; }
@@ -87,7 +78,6 @@ summary::-webkit-details-marker { display: none; }
 .details-content { padding: 4px 16px 20px; }
 .subheading { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 12px; }
 .checkbox-label { display: flex; align-items: flex-start; gap: 10px; font-size: 13px; font-weight: 400; line-height: 1.55; padding: 12px 0; min-height: 48px; cursor: pointer; }
-.sharing-consent { color: var(--muted); margin: 18px 0 8px; font-size: 12px; }
 .material-row { display: grid; grid-template-columns: 1fr 1fr 44px; gap: 10px; border-top: 1px solid var(--line); padding-top: 16px; margin-bottom: 12px; }
 .material-row>.field:first-child { grid-column: 1 / 3; }
 .material-row>.icon-button { grid-column: 3; align-self: end; margin-bottom: 12px; min-height: 50px; padding: 8px; }
@@ -107,8 +97,6 @@ summary::-webkit-details-marker { display: none; }
 .alert { padding: 15px; border-radius: 10px; background: #fff1e5; border: 1px solid #dfbd9d; color: #79452c; font-size: 13px; margin-bottom: 20px; }
 .alert button { margin-top: 10px; }
 .example-note { margin: -6px 0 22px; font-size: 12px; color: #776039; }
-.example-note summary { padding: 12px 0; min-height: 44px; }
-.example-note p { padding-bottom: 12px; }
 .step-editor { background: white; border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin-bottom: 16px; }
 .step-editor-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 17px; }
 .step-editor-heading h3 { display: flex; align-items: center; gap: 10px; font-size: 14px; }
@@ -120,10 +108,8 @@ summary::-webkit-details-marker { display: none; }
 .step-footer { display: flex; justify-content: space-between; align-items: center; }
 .step-footer button { min-height: 44px; font-size: 12px; }
 .full-width { display: flex; justify-content: center; width: 100%; border-style: dashed; font-size: 14px; }
-.empty-state { color: var(--muted); font-size: 14px; padding: 15px 0 28px; }
 .check-results { margin-top: 16px; font-size: 13px; }
 .check-success { color: var(--green); font-size: 13px; }
-.check-results>p { margin-top: 12px; }
 .suggestion { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line); }
 .suggestion p { margin-top: 7px; font-size: 13px; }
 .dismissed { opacity: .6; }
@@ -158,7 +144,8 @@ summary::-webkit-details-marker { display: none; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border-width: 0; }
 @media(min-width:700px) { .topbar { padding-top: 25px; min-height: 96px; }.workspace-main { padding-top: 10px; }.welcome { padding-top: 75px; }.photo-preview { height: 180px; }.page-heading h1 { font-size: 31px; } }
 @media(max-width:360px) { .topbar { padding-inline: 16px; }.brand { font-size: 15px; }.workspace-main { padding-inline: 16px; }.workflow-tabs button { font-size: 11px; gap: 5px; }.action-dock { padding-inline: 16px; gap: 10px; }.action-dock .primary { font-size: 12px; }.detail-status { font-size: 10px; } }
-.instruction-language { margin: -10px 0 22px; justify-content: space-between; }.instruction-language select { border: 0; min-height: 44px; padding: 8px 0 8px 8px; text-align: right; }.action-dock { flex-wrap: wrap; row-gap: 9px; }.share-note { flex-basis: 100%; font-size: 10px; line-height: 1.4; color: var(--muted); }.action-dock:has(.share-note) { padding-top: 10px; }.workspace-main:has(.share-note) { padding-bottom: calc(140px + env(safe-area-inset-bottom)); }
+.instruction-language { margin: -10px 0 22px; justify-content: space-between; }.instruction-language select { border: 0; min-height: 44px; padding: 8px 0 8px 8px; text-align: right; }.action-dock { flex-wrap: wrap; row-gap: 9px; }
+
 /* Dictation stays inside each text field; recording controls appear only on request. */
 .speech-field { position: relative; }
 .field-label-row { display: flex; align-items: center; min-height: 22px; }
@@ -171,7 +158,6 @@ summary::-webkit-details-marker { display: none; }
 .voice-heading h2 { font-size: 21px; }
 .voice-heading .icon-button { width: 44px; padding: 7px; background: transparent; border: 0; font-size: 25px; }
 .voice-target { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; margin: 2px 0 12px; }
-.voice-privacy { font-size: 12px; color: var(--muted); line-height: 1.6; }
 .voice-error { background: #fff1e5; color: #79452c; border-radius: 9px; padding: 12px; margin-top: 16px; font-size: 13px; }
 .voice-indicator { display: grid; place-items: center; margin: 25px auto 14px; width: 68px; height: 68px; border-radius: 50%; background: #edf3e6; color: var(--green); }
 .voice-indicator svg { width: 29px; height: 29px; }

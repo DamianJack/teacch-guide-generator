@@ -11,7 +11,7 @@ npm ci
 npm run dev
 ```
 
-Open http://localhost:3000. Manual authoring works without AI credentials. To enable generation and quality checking, copy `.env.example` to `.env.local`, set `OPENAI_API_KEY` and `AI_MODEL` to an accessible OpenAI image-capable model supporting Structured Outputs, and restart the server. Use the exact model ID without a provider prefix. Keep both settings server-only.
+Open http://localhost:3000. Manual authoring works without AI credentials. To enable generation and quality checking, copy `.env.example` to `.env.local`, set `FIREWORKS_API_KEY`, and restart the server. `AI_MODEL` is set to `accounts/fireworks/models/deepseek-v4p1-flash` (DeepSeek V4.1 Flash). Keep both settings server-only. The model must accept photos and structured JSON outputs; use its exact Fireworks model ID.
 
 For optional voice input, also set the server-only `ELEVENLABS_API_KEY` with Speech to Text (`speech_to_text`) permission and restart. A mic button on each text field opens a recording sheet: record, stop and transcribe, review/edit the transcript, then add it to the field. New speech appends to the latest field text; it never silently replaces text or truncates it to fit. Adding it uses the same draft-save and approval-invalidation path as typing.
 
@@ -27,7 +27,9 @@ Audio exists temporarily in memory and is sent only on an explicit transcription
 
 The English/German interface is separate from the instruction language. The labeled example is illustrative practice content; it requires real kit photos and trainer verification. It is not a prerecorded AI result.
 
-One draft, including resized photo blobs, is stored atomically in IndexedDB using Dexie. Failed writes show **Not saved** and preserve the previous successful save. Browser/site data deletion removes the draft; there is no cloud backup. No photos or tasks are sent in the background. Explicit AI requests send the task and selected photos to OpenAI with provider storage disabled. Do not use identifiable participant data.
+One draft, including resized photo blobs, is stored atomically in IndexedDB using Dexie. Failed writes show **Not saved** and preserve the previous successful save. Browser/site data deletion removes the draft; there is no cloud backup. No photos or tasks are sent in the background. Explicit AI requests send the task and selected photos to Fireworks. Provider retention policies apply. Do not use identifiable participant data.
+
+Generation and quality checking use Fireworks' Chat Completions API with image data URLs and a JSON schema. Responses are validated again on the server, including photo and step references. Incomplete responses and provider errors leave the current draft intact. No client-side provider keys or raw task/photo logging are used.
 
 Image input: JPEG, PNG or WebP, at most 12 MB / 40 megapixels each, 12 photos total. Images are resized to at most 1280 pixels and compressed to at most 160 KB JPEG each. The server accepts at most 3.5 MB per request and validates input, output and photo references. Instructions support 24 materials and 24 steps. Verify these limits with the actual demo photos before presenting.
 
@@ -49,10 +51,10 @@ Use HTTPS for Android installation, camera and microphone access outside localho
 
 ## Remaining demo verification
 
-- Configure credentials and run real photo-aware generation and separate quality checks in English and German with the trainer's kit photos and exact quantities.
+- Run photo-aware generation and separate quality checks in English and German with the trainer's actual kit photos and exact quantities.
 - On the target Android phone: install over HTTPS, capture photos, download/open the PDF and inspect its pages.
 - Verify real microphone capture and English/German transcription using the configured ElevenLabs key, including permission denial and cancellation.
 - Verify offline reopening, storage-write failure, network/model failure and interrupted requests on the deployed app.
 - Review accessibility and learner suitability with the intended users before claiming conformance or educational outcomes.
 
-The UI has been checked in a 390-pixel phone viewport, including navigation, local recovery, independent interface language switching and the voice recording sheet. A synthetic English recording passed the real ElevenLabs transcription endpoint (HTTP 200, correct text). Android microphone hardware, live German transcription, photo-aware AI, deployment and PDF visual inspection remain unverified. Icons are neutral placeholders pending approved branding.
+The UI has been checked in a 390-pixel phone viewport, including navigation, local recovery, independent interface language switching and the voice recording sheet. A synthetic English recording passed the real ElevenLabs transcription endpoint (HTTP 200, correct text). English drafting and quality checking passed through the running app against Fireworks DeepSeek V4.1 Flash using a neutral image fixture. The real materials-kit demo, live German generation/transcription, Android hardware, deployment and PDF visual inspection remain unverified. Icons are neutral placeholders pending approved branding.

@@ -7,7 +7,7 @@ import { appendTranscript, SPEECH_LIMITS } from "../lib/speech";
 
 type Props = {
   label: string; value: string; onChange: (value: string) => void; maxLength: number;
-  language: Language; uiLanguage: Language; rows?: number; placeholder?: string;
+  language: Language; uiLanguage: Language; rows?: number;
 };
 type VoiceError = "voiceUnavailable" | "voicePermission" | "voiceOffline" | "voiceFailed" | "voiceEmpty" | "voiceLimit" | "voiceLength" | "voiceConfiguration";
 
@@ -17,7 +17,7 @@ function Microphone() {
 
 export function SpeechField(props: Props) {
   const fieldId = useId(); const [open, setOpen] = useState(false); const t = copy[props.uiLanguage];
-  const input = { id: fieldId, value: props.value, maxLength: props.maxLength, placeholder: props.placeholder,
+  const input = { id: fieldId, value: props.value, maxLength: props.maxLength,
     onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => props.onChange(e.target.value) };
   return <div className="field speech-field">
     <div className="field-label-row"><label htmlFor={fieldId}>{props.label}</label><button type="button" className="mic-button" aria-label={`${t.speak}: ${props.label}`} title={t.speak} onClick={() => setOpen(true)}><Microphone /></button></div>
@@ -123,7 +123,6 @@ function Dictation({ label, value, onChange, maxLength, language, uiLanguage, ro
   return <dialog ref={dialog} className="voice-dialog" aria-labelledby={titleId} onCancel={event => { event.preventDefault(); dismiss(); }}>
     <div className="voice-heading"><h2 id={titleId}>{t.speak}</h2><button className="icon-button" aria-label={t.close} onClick={dismiss}>×</button></div>
     <p className="voice-target">{label} · {language === "de" ? "Deutsch" : "English"}</p>
-    <p className="voice-privacy">{t.voicePrivacy}</p>
     {error && <p className="voice-error" role="alert">{t[error]}</p>}
     {phase === "review" ? <><label className="voice-review"><span>{t.voiceReview}</span><textarea rows={5} value={transcript} maxLength={8000} onChange={e => { setTranscript(e.target.value); setError(null); }} /></label><button className="primary full-width" disabled={!transcript.trim()} onClick={apply}>{t.voiceAdd}</button></> : <>
       <div className={`voice-indicator ${phase === "recording" ? "is-recording" : ""}`} aria-hidden="true"><Microphone /></div>

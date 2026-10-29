@@ -31,33 +31,50 @@ test("AI boundary rejects invalid requests, provider failures and invented photo
   const bundle = await build({ entryPoints: ["src/lib/ai.ts"], bundle: true, write: false, platform: "node", format: "esm" });
   const { handleAI } = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString("base64")}`);
   const originalFetch = globalThis.fetch;
-  const originalKey = process.env.OPENAI_API_KEY; const originalModel = process.env.AI_MODEL;
+  const originalKey = process.env.FIREWORKS_API_KEY; const originalModel = process.env.AI_MODEL;
   const request = body => new Request("http://localhost/api/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   const input = { facts: { language: "de", title: "Set packen", notes: "", materials: [], noMaterials: true, finished: "", next: "", help: "" },
     steps: [], questions: [], photos: [{ id: "photo-1", data: "data:image/jpeg;base64,/9j/2Q==" }] };
   try {
     assert.equal((await handleAI(request({}), "generate")).status, 400);
     assert.equal((await handleAI(new Request("http://localhost/api/generate", { method: "POST", headers: { "Content-Type": "application/json", "Content-Length": "4000000" }, body: "{}" }), "generate")).status, 413);
-    delete process.env.OPENAI_API_KEY; delete process.env.AI_MODEL;
+    delete process.env.FIREWORKS_API_KEY; delete process.env.AI_MODEL;
     assert.equal((await handleAI(request(input), "generate")).status, 503);
-    process.env.OPENAI_API_KEY = "test-key"; process.env.AI_MODEL = "test-model";
+    process.env.FIREWORKS_API_KEY = "test-key"; process.env.AI_MODEL = "accounts/fireworks/models/deepseek-v4p1-flash";
     let output = { steps: [{ text: "Set packen", photoId: "photo-1" }], finished: "", next: "", help: "", questions: ["Was gehört in das Set?"] };
-    globalThis.fetch = async (_url, options) => {
+    let finishReason = "stop";
+    globalThis.fetch = async (url, options) => {
+      assert.equal(url, "https://api.fireworks.ai/inference/v1/chat/completions");
+      assert.equal(options.headers.Authorization, "Bearer test-key");
       const sent = JSON.parse(options.body);
-      assert.equal(sent.store, false); assert.equal(sent.text.format.strict, true);
-      assert.match(sent.instructions, /German/);
-      assert.equal(sent.input[0].content[2].type, "input_image");
-      return Response.json({ status: "completed", output: [{ type: "message", content: [{ type: "output_text", text: JSON.stringify(output) }] }] });
+      assert.equal(sent.model, "accounts/fireworks/models/deepseek-v4p1-flash");
+      assert.equal(sent.response_format.type, "json_schema");
+      assert.equal(sent.response_format.json_schema.schema.additionalProperties, false);
+      const properties = sent.response_format.json_schema.schema.properties;
+      if (properties.steps) assert.deepEqual(properties.steps.items.properties.photoId.enum, ["photo-1"]);
+      else assert.deepEqual(properties.suggestions.items.properties.target.enum, ["title", "materials", "finished", "next", "help"]);
+      assert.match(sent.messages[0].content, /German/);
+      assert.equal(sent.messages[1].content[2].type, "image_url");
+      assert.equal(sent.messages[1].content[2].image_url.url, input.photos[0].data);
+      return Response.json({ choices: [{ finish_reason: finishReason, message: { content: JSON.stringify(output) } }] });
     };
     const success = await handleAI(request(input), "generate");
     assert.equal(success.status, 200); assert.deepEqual(await success.json(), output);
+    finishReason = "length";
+    assert.equal((await handleAI(request(input), "generate")).status, 502);
+    finishReason = "stop";
     output = { ...output, steps: [{ text: "Do something", photoId: "invented" }] };
     assert.equal((await handleAI(request(input), "generate")).status, 502);
+    output = { suggestions: [{ target: "help", issue: "Hilfe ergänzen." }], questions: ["Wer hilft?"] };
+    const checked = await handleAI(request(input), "check");
+    assert.equal(checked.status, 200); assert.deepEqual(await checked.json(), output);
+    globalThis.fetch = async () => new Response(null, { status: 401 });
+    assert.equal((await handleAI(request(input), "generate")).status, 503);
     globalThis.fetch = async () => { throw new Error("offline"); };
     assert.equal((await handleAI(request(input), "check")).status, 502);
   } finally {
     globalThis.fetch = originalFetch;
-    if (originalKey === undefined) delete process.env.OPENAI_API_KEY; else process.env.OPENAI_API_KEY = originalKey;
+    if (originalKey === undefined) delete process.env.FIREWORKS_API_KEY; else process.env.FIREWORKS_API_KEY = originalKey;
     if (originalModel === undefined) delete process.env.AI_MODEL; else process.env.AI_MODEL = originalModel;
   }
 });
