@@ -1,4 +1,4 @@
-# Visual Guide
+# Klarblick
 
 A mobile-first PWA for trainers to turn workplace photos and task facts into editable visual work instructions. Scope: [PRD.md](PRD.md).
 
@@ -22,7 +22,7 @@ Audio exists temporarily in memory and is sent only on an explicit transcription
 ## Workflow
 
 1. Create: capture the task step by step. Each step card takes one or more photos (camera or gallery) and an optional note; tap **＋ Add step** for the next one. Optionally add a task title, notes and **Materials**. Choose the instruction language before entering content. **Create steps** turns each step's photos into one TEACCH-style learner action.
-2. Edit: rewrite step text, add or remove photos, split, remove and reorder steps.
+2. Edit: rewrite step text, add or remove photos, split, remove and reorder steps. Use **Focus** below a photo to tap a workpiece and adjust the oval with the position/size sliders. Keyboard users can place the oval with Enter and move it with the arrow keys (Shift for larger moves). Save applies it; Cancel discards changes. Remove focus, then Save, restores the original view.
 3. Preview: inspect the entire guide, explicitly approve the current revision, then download its A4 PDF. Approval only requires a photo for every step; empty optional sections are left out. Content changes revoke approval; changing interface language preserves it.
 
 The English/German interface is separate from the instruction language. The labeled example is illustrative practice content; it requires real kit photos and trainer verification. It is not a prerecorded AI result.
@@ -30,6 +30,10 @@ The English/German interface is separate from the instruction language. The labe
 One draft, including resized photo blobs, is stored atomically in IndexedDB using Dexie. Failed writes show **Not saved** and preserve the previous successful save. Browser/site data deletion removes the draft; there is no cloud backup. No photos or tasks are sent in the background. Explicit AI requests send the task and selected photos to Fireworks. Provider retention policies apply. Do not use identifiable participant data.
 
 Step generation uses Fireworks' Chat Completions API with image data URLs and a JSON schema. Responses are validated again on the server, including step references; failures are logged server-side with their cause. Incomplete responses and provider errors leave the current draft intact. No client-side provider keys or raw task/photo logging are used.
+
+Focus works offline and keeps the original photo intact. Normalized oval coordinates are saved per step/photo in the existing draft, including when steps share a photo. A static, two-tone outline and light background dimming use the same Canvas renderer in the editor, learner preview and PDF. Focus changes revoke approval. Old drafts without focus metadata remain supported; splitting a step starts its reused photos without focus.
+
+**Suggest focus** is optional and uses the same server-only Fireworks settings. After a step has text, this explicit action sends only the selected photo and step text (plus the guide language) to `/api/focus`. Suggestions are validated for finite, in-bounds coordinates. The trainer must check and save them; an unclear result, failed request, cancellation or manual adjustment does not overwrite the saved focus. AI localization accuracy on small or similar parts must be checked with the actual kit photos; manual placement remains available.
 
 Image input: JPEG, PNG or WebP, at most 12 MB / 40 megapixels each, 12 photos total. Images are resized to at most 1280 pixels and compressed to at most 160 KB JPEG each. The server accepts at most 3.5 MB per request and validates input, output and photo references. Instructions support 24 materials and 24 steps. Verify these limits with the actual demo photos before presenting.
 
@@ -43,7 +47,9 @@ npm run build
 npm start
 ```
 
-There are seven focused tests covering the PWA foundation, approval and revision rules, ordering, request limits, missing configuration, provider failure, invalid AI photo references, transcript insertion and speech-upload validation. Provider responses in tests are mocked; they do not establish that live AI or live transcription works.
+Focused tests cover the PWA foundation, approval and revision rules, ordering, request limits, missing configuration, provider failure, invalid AI photo references, transcript insertion, speech-upload validation, spotlight bounds/rendering, per-step focus recovery and focus API responses. Provider responses in tests are mocked; they do not establish that live AI or live transcription works.
+
+Spotlight browser checks use a synthetic workbench image at phone and desktop sizes. They cover placement, keyboard/sliders, save/reload, cancellation/removal, approval reset, shared-photo independence, offline editing, English/German labels and PDF download. Unclear/failed suggestions preserve the current selection; delayed mocked suggestions cannot overwrite manual adjustments. The synthetic PDF was rendered and visually inspected. Real model localization on the trainer's kit photos remains unverified.
 
 The build runs Next.js then Serwist to precache the shell and static assets. Service worker registration is disabled in development. To check offline reopening, run the production build, open it online, wait for service worker activation, then reopen offline. Draft capture/edit/save/recovery stays local. AI routes remain online-only and are not cached. Requests never automatically repeat after reconnecting.
 
@@ -57,4 +63,4 @@ Use HTTPS for Android installation, camera and microphone access outside localho
 - Verify offline reopening, storage-write failure, network/model failure and interrupted requests on the deployed app.
 - Review accessibility and learner suitability with the intended users before claiming conformance or educational outcomes.
 
-The UI has been checked in a 390-pixel phone viewport, including navigation, local recovery, independent interface language switching and the voice recording sheet. A synthetic English recording passed the real ElevenLabs transcription endpoint (HTTP 200, correct text). English drafting and quality checking passed through the running app against Fireworks DeepSeek V4.1 Flash using a neutral image fixture. The real materials-kit demo, live German generation/transcription, Android hardware, deployment and PDF visual inspection remain unverified. Icons are neutral placeholders pending approved branding.
+The UI has been checked in a 390-pixel phone viewport, including navigation, local recovery, independent interface language switching and the voice recording sheet. A synthetic English recording passed the real ElevenLabs transcription endpoint (HTTP 200, correct text). English drafting and quality checking passed through the running app against Fireworks DeepSeek V4.1 Flash using a neutral image fixture. The real materials-kit demo, live German generation/transcription, Android hardware, deployment and PDF output on the target Android device remain unverified. Icons are neutral placeholders pending approved branding.

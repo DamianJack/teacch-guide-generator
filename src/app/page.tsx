@@ -1,18 +1,27 @@
 "use client";
-/* eslint-disable @next/next/no-img-element -- Photos are private local blob URLs, never optimizer requests. */
 /* eslint-disable react-hooks/set-state-in-effect -- Initialize browser preferences and manage object URL lifetimes after hydration. */
 
 import { useEffect, useRef, useState } from "react";
-import { approvalIssues, listedMaterials, showMaterials, editDraft, generationSchema, headings, id, LIMITS, move, newDraft, newStep, photosInStepOrder, sameRevision, usedPhotos, type Draft, type Language, type Step } from "../lib/guide";
+import { approvalIssues, listedMaterials, showMaterials, editDraft, generationSchema, headings, id, LIMITS, move, newDraft, newStep, photosInStepOrder, sameRevision, setStepFocus, usedPhotos, type Draft, type FocusRegion, type Language, type Step } from "../lib/guide";
 import { dataUrl, loadDraft, preparePhoto, saveDraft } from "../lib/storage";
 import { copy } from "../lib/copy";
 import { SpeechField } from "../components/speech-field";
+import { FocusImage } from "../components/focus-image";
+import { FocusEditor } from "../components/focus-editor";
 
+const Icon = {
+  up: <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 15l6-6 6 6" /></svg>,
+  down: <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>,
+  trash: <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" /></svg>,
+  camera: <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z" /><circle cx="12" cy="13" r="3.5" /></svg>,
+  gallery: <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3 16l5-5 4 4 3-3 6 6" /></svg>,
+  close: <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>,
+};
 type Message = "imageError" | "photoLimit" | "configured" | "aiError" | "staleResponse" | "limitError" | "pdfError" | "offlineAI";
-function PhotoDialog({ src, alt, label, close }: { src: string; alt: string; label: string; close: () => void }) {
+function PhotoDialog({ src, alt, label, region, errorLabel, close }: { src: string; alt: string; label: string; region?: FocusRegion; errorLabel: string; close: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null);
   useEffect(() => { dialog.current?.showModal(); }, []);
-  return <dialog ref={dialog} className="photo-modal" aria-label={label} onCancel={close}><button autoFocus onClick={close}>{label} ×</button><img src={src} alt={alt} /></dialog>;
+  return <dialog ref={dialog} className="photo-modal" aria-label={label} onCancel={close}><button autoFocus onClick={close}>{label} ×</button><FocusImage src={src} region={region} alt={alt} errorLabel={errorLabel} /></dialog>;
 }
 function exampleDraft(language: Language) {
   const d = newDraft(language); d.example = true;
@@ -21,7 +30,7 @@ function exampleDraft(language: Language) {
     : ["Put the empty box on the table.", "Put 4 screws in the box.", "Put 4 washers in the box.", "Check the amounts.", "Close the box."];
   return { ...d, steps: steps.map(text => newStep(text)), title: de ? "Ein Materialset packen" : "Pack one materials kit",
     materials: [{ id: id(), name: de ? "Schachtel" : "Box", quantity: "1", unit: de ? "Stück" : "piece" }, { id: id(), name: de ? "Schraube" : "Screw", quantity: "4", unit: de ? "Stück" : "pieces" }, { id: id(), name: de ? "Unterlegscheibe" : "Washer", quantity: "4", unit: de ? "Stück" : "pieces" }],
-    notes: de ? "Stelle die leere Schachtel auf den Tisch. Lege 4 Schrauben hinein. Lege 4 Unterlegscheiben hinein. Prüfe die Mengen. Schließe die Schachtel." : "Put the empty box on the table. Put 4 screws in the box. Put 4 washers in the box. Check the amounts. Close the box." };
+    notes: "" };
 }
 
 export default function Home() {
@@ -35,7 +44,9 @@ export default function Home() {
   const [message, setMessage] = useState<Message | null>(null);
   const [manual, setManual] = useState(false);
   const [exporting, setExporting] = useState(false); const [photoBusy, setPhotoBusy] = useState(false);
-  const [urls, setUrls] = useState<Record<string, string>>({}); const [viewPhoto, setViewPhoto] = useState<string | null>(null);
+  const [urls, setUrls] = useState<Record<string, string>>({});
+  const [viewPhoto, setViewPhoto] = useState<{ stepId: string; photoId: string } | null>(null);
+  const [focusPhoto, setFocusPhoto] = useState<{ draftId: string; stepId: string; photoId: string } | null>(null);
   const [scrollToStep, setScrollToStep] = useState<string | null>(null);
 
   useEffect(() => {
@@ -136,24 +147,26 @@ export default function Home() {
   function stepCard(s: Step, index: number, capture: boolean) {
     const label = `${t.step} ${index + 1}`; const full = photoBusy || draft!.photos.length >= LIMITS.photos;
     return <article className="step-editor" id={`step-${s.id}`} key={s.id}>
-      <div className="step-editor-heading"><h3><span className="step-number">{index + 1}</span>{label}</h3><div className="button-row">{stepButtons(index)}</div></div>
-      {s.photoIds.length > 0 && <div className="step-photos">{s.photoIds.map((pid, pi) => <div className="step-photo" key={pid}>
-        <button className="photo-preview" onClick={() => setViewPhoto(pid)} aria-label={`${t.viewPhoto}: ${label}, ${t.photo} ${pi + 1}`}>{urls[pid] && <img src={urls[pid]} alt={`${label}, ${t.photo} ${pi + 1}`} />}</button>
-        <button className="icon-button danger" aria-label={`${t.remove}: ${label}, ${t.photo} ${pi + 1}`} onClick={() => { if (window.confirm(t.deletePhoto)) editSteps(draft!.steps.map(x => x.id === s.id ? { ...x, photoIds: x.photoIds.filter(other => other !== pid) } : x)); }}>×</button>
-      </div>)}</div>}
-      <div className="upload-buttons">
-        <label className="file-button primary">＋ {s.photoIds.length ? t.cameraMore : t.camera}<input aria-label={`${t.camera}: ${label}`} type="file" accept="image/jpeg,image/png,image/webp" capture="environment" disabled={full} onChange={e => { void upload(e.target.files, s.id); e.target.value = ""; }} /></label>
-        <label className="file-button secondary">{t.choose}<input aria-label={`${t.choose}: ${label}`} type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={full} onChange={e => { void upload(e.target.files, s.id); e.target.value = ""; }} /></label>
+      <div className="step-editor-heading"><h3><span className="step-number">{index + 1}</span>{label}</h3><div className="step-tools">{stepButtons(index)}<button type="button" className="tool-danger" aria-label={`${t.remove}: ${label}`} onClick={() => { if (window.confirm(t.deleteStep)) editSteps(draft!.steps.filter(x => x.id !== s.id)); }}>{Icon.trash}</button></div></div>
+      <div className={`step-photos ${s.photoIds.length ? "" : "empty"}`}>{s.photoIds.map((pid, pi) => <div className="step-photo" key={pid}>
+        <button className="photo-preview" onClick={() => setViewPhoto({ stepId: s.id, photoId: pid })} aria-label={`${t.viewPhoto}: ${label}, ${t.photo} ${pi + 1}`}>{urls[pid] && <FocusImage src={urls[pid]} region={s.focusByPhoto?.[pid]} alt={`${label}, ${t.photo} ${pi + 1}`} errorLabel={t.focusImageError} />}</button>
+        <button className="focus-button" disabled={busy || !urls[pid]} aria-label={`${t.focus}: ${label}, ${t.photo} ${pi + 1}`} onClick={() => setFocusPhoto({ draftId: draft!.id, stepId: s.id, photoId: pid })}><span aria-hidden="true">◎</span> {t.focus}{s.focusByPhoto?.[pid] && <span aria-hidden="true"> ✓</span>}</button>
+        <button className="icon-button danger" aria-label={`${t.remove}: ${label}, ${t.photo} ${pi + 1}`} onClick={() => { if (window.confirm(t.deletePhoto)) editSteps(draft!.steps.map(x => x.id === s.id ? { ...setStepFocus(x, pid, null), photoIds: x.photoIds.filter(other => other !== pid) } : x)); }}>{Icon.close}</button>
+      </div>)}
+        <label className="photo-add file-button">{Icon.camera}<span>{s.photoIds.length ? t.cameraMore : t.camera}</span><input aria-label={`${t.camera}: ${label}`} type="file" accept="image/jpeg,image/png,image/webp" capture="environment" disabled={full} onChange={e => { void upload(e.target.files, s.id); e.target.value = ""; }} /></label>
       </div>
+      <label className="file-link">{Icon.gallery}{t.choose}<input aria-label={`${t.choose}: ${label}`} type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={full} onChange={e => { void upload(e.target.files, s.id); e.target.value = ""; }} /></label>
       <SpeechField {...speechLanguage} label={`${capture ? t.stepNote : t.action} · ${label}`} maxLength={600} rows={capture ? 2 : 3} value={s.text} onChange={value => edit({ steps: draft!.steps.map(x => x.id === s.id ? { ...x, text: value } : x) })} />
-      <div className="step-footer">{capture ? <span /> : <button className="text-button" disabled={draft!.steps.length >= LIMITS.steps} onClick={() => addStep(index + 1, s.photoIds)}>＋ {t.split}</button>}<button className="text-button danger" onClick={() => { if (window.confirm(t.deleteStep)) editSteps(draft!.steps.filter(x => x.id !== s.id)); }}>{t.remove}</button></div>
+      {!capture && <div className="step-footer"><button className="text-button" disabled={draft!.steps.length >= LIMITS.steps} onClick={() => addStep(index + 1, s.photoIds)}>＋ {t.split}</button></div>}
     </article>;
   }
   function stepButtons(index: number) {
-    return <><button type="button" disabled={index === 0} onClick={() => edit({ steps: move(draft!.steps, index, -1) })} aria-label={`${t.up}: ${t.step} ${index + 1}`}>↑</button><button type="button" disabled={index === draft!.steps.length - 1} onClick={() => edit({ steps: move(draft!.steps, index, 1) })} aria-label={`${t.down}: ${t.step} ${index + 1}`}>↓</button></>;
+    return <><button type="button" disabled={index === 0} onClick={() => edit({ steps: move(draft!.steps, index, -1) })} aria-label={`${t.up}: ${t.step} ${index + 1}`}>{Icon.up}</button><button type="button" disabled={index === draft!.steps.length - 1} onClick={() => edit({ steps: move(draft!.steps, index, 1) })} aria-label={`${t.down}: ${t.step} ${index + 1}`}>{Icon.down}</button></>;
   }
 
   const aiDisabled = !online || busy || photoBusy || !draft?.photos.length;
+  const focusedStep = draft?.id === focusPhoto?.draftId ? draft?.steps.find(s => s.id === focusPhoto?.stepId && s.photoIds.includes(focusPhoto.photoId)) : undefined;
+  const focusedPhoto = focusedStep && draft?.photos.find(p => p.id === focusPhoto?.photoId);
   const canApprove = !issues.length && manual && !photoBusy && !busy;
   async function exportPDF() {
     setExporting(true); setMessage(null);
@@ -166,14 +179,14 @@ export default function Home() {
 
   return <div className="app-shell">
     <header className="topbar">
-      <button className="brand" onClick={() => setStarted(false)}><span className="brand-icon" aria-hidden="true">▥</span>{t.brand}</button>
+      <button className="brand" onClick={() => setStarted(false)}><svg className="brand-icon" viewBox="0 0 100 100" aria-hidden="true"><circle cx="16" cy="22" r="9" fill="#005aaa" /><circle cx="16" cy="50" r="9" fill="#1c7f2a" /><circle cx="16" cy="78" r="9" fill="#91268f" /><rect x="38" y="26" width="54" height="54" rx="10" fill="none" stroke="#a3322e" strokeWidth="7" /><path d="M51 53l10 10 19-21" fill="none" stroke="#a3322e" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round" /></svg>{t.brand}</button>
       <div className="top-actions">
         {!online && <span className="offline-status" role="status">{t.offline}</span>}
-        <label className="language-control"><span className="sr-only">{t.uiLanguage}</span><select value={language} onChange={e => setLanguage(e.target.value as Language)}><option value="en">EN</option><option value="de">DE</option></select></label>
+        <div className="language-toggle" role="group" aria-label={t.uiLanguage}>{(["en", "de"] as const).map(l => <button key={l} type="button" aria-pressed={language === l} onClick={() => setLanguage(l)}>{l.toUpperCase()}</button>)}</div>
       </div>
     </header>
     {!ready ? <main className="welcome"><p role="status">{t.loading}</p></main> : !started || !draft ? <main className="welcome">
-      <div className="welcome-symbol" aria-hidden="true">▧</div>
+      <svg className="welcome-symbol" viewBox="0 0 100 100" aria-hidden="true"><circle cx="16" cy="22" r="9" fill="#005aaa" /><circle cx="16" cy="50" r="9" fill="#1c7f2a" /><circle cx="16" cy="78" r="9" fill="#91268f" /><rect x="38" y="26" width="54" height="54" rx="10" fill="none" stroke="#a3322e" strokeWidth="7" /><path d="M51 53l10 10 19-21" fill="none" stroke="#a3322e" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round" /></svg>
       <h1>{t.welcome}</h1>
       {loadError && <div className="alert" role="alert">{t.loadError}<button onClick={() => { setReady(false); setRetry(n => n + 1); }}>{t.retry}</button></div>}
       <div className="welcome-actions">
@@ -190,8 +203,8 @@ export default function Home() {
       {message && <div className="alert" role="alert">{t[message]}</div>}
       {draft.example && <p className="example-note">{t.exampleBadge}</p>}
       {area === 0 && <>
-        <section className="task-fields">          <SpeechField {...speechLanguage} label={t.title} maxLength={160} value={draft.title} onChange={value => edit({ title: value })} />
-          <SpeechField {...speechLanguage} label={t.notes} maxLength={5000} rows={3} value={draft.notes} onChange={value => edit({ notes: value })} />
+        <section className="task-fields">
+          <SpeechField {...speechLanguage} label={t.title} maxLength={160} value={draft.title} onChange={value => edit({ title: value })} />
 
         </section>
         <section className="photos-section"><div className="section-heading"><h2>{t.steps}</h2><span className="count">{draft.photos.length}/{LIMITS.photos} {t.photos}</span></div>
@@ -219,7 +232,7 @@ export default function Home() {
       {area === 2 && <>
         <article className="learner-preview" lang={draft.language}>
           {draft.title.trim() && <h2>{draft.title}</h2>}{showMaterials(draft) && <section><h3>{h.materials}</h3>{draft.noMaterials ? <p>{h.none}</p> : <ul className="learner-materials">{listedMaterials(draft).map(m => <li key={m.id}><b>{m.quantity} {m.unit}</b> {m.name}</li>)}</ul>}</section>}
-          <section><h3>{h.steps}</h3>{draft.steps.map((s, index) => <div className="learner-step" key={s.id}><h4><span>{index + 1}</span>{h.step} {index + 1}</h4>{s.photoIds.length > 0 && <div className={`learner-photos ${s.photoIds.length > 1 ? "multiple" : ""}`}>{s.photoIds.filter(pid => urls[pid]).map((pid, pi) => <img key={pid} src={urls[pid]} alt={`${h.step} ${index + 1}, ${pi + 1}`} />)}</div>}{s.text.trim() && <p>{s.text}</p>}</div>)}</section>
+          <section><h3>{h.steps}</h3>{draft.steps.map((s, index) => <div className="learner-step" key={s.id}><h4><span>{index + 1}</span>{h.step} {index + 1}</h4>{s.photoIds.length > 0 && <div className={`learner-photos ${s.photoIds.length > 1 ? "multiple" : ""}`}>{s.photoIds.filter(pid => urls[pid]).map((pid, pi) => <FocusImage key={pid} src={urls[pid]} region={s.focusByPhoto?.[pid]} alt={`${h.step} ${index + 1}, ${pi + 1}`} errorLabel={t.focusImageError} />)}</div>}{s.text.trim() && <p>{s.text}</p>}</div>)}</section>
         </article>
         <section className="approval-panel">
           {issues.length > 0 && <div className="validation"><strong>{t.missing}</strong><ul>{issues.map(issue => <li key={issue}>{issueLabels[issue as keyof typeof issueLabels]}</li>)}</ul><button className="text-button" onClick={() => navigate(0)}>{t.fixMissing} →</button></div>}
@@ -232,6 +245,12 @@ export default function Home() {
         {area === 0 ? <><button className="text-button" onClick={() => navigate(1)}>{t.manualEdit}</button><button className="primary" disabled={aiDisabled} onClick={() => void generate()}>{busy ? t.generating : t.generate}<span aria-hidden="true">→</span></button></> : area === 1 ? <><button className="text-button" onClick={() => navigate(0)}>← {t.back}</button><button className="primary" onClick={() => navigate(2)}>{t.preview} <span aria-hidden="true">→</span></button></> : <><button className="text-button" onClick={() => navigate(1)}>← {t.edit}</button>{approved ? <button className="primary" disabled={exporting || saveState !== "saved"} onClick={() => void exportPDF()}>{exporting ? t.exporting : t.download}<span aria-hidden="true">↓</span></button> : <button className="primary" disabled={!canApprove} onClick={() => { const latest = current.current; if (latest && !approvalIssues(latest).length) store({ ...latest, approvedRevision: latest.revision }, false); }}>{t.approve} <span aria-hidden="true">✓</span></button>}</>}
       </div>
     </main>}
-    {viewPhoto && urls[viewPhoto] && <PhotoDialog src={urls[viewPhoto]} alt={draft?.photos.find(p => p.id === viewPhoto)?.name ?? t.photo} label={t.close} close={() => setViewPhoto(null)} />}
+    {viewPhoto && urls[viewPhoto.photoId] && <PhotoDialog src={urls[viewPhoto.photoId]} region={draft?.steps.find(s => s.id === viewPhoto.stepId)?.focusByPhoto?.[viewPhoto.photoId]} alt={draft?.photos.find(p => p.id === viewPhoto.photoId)?.name ?? t.photo} label={t.close} errorLabel={t.focusImageError} close={() => setViewPhoto(null)} />}
+    {focusPhoto && focusedStep && focusedPhoto && urls[focusedPhoto.id] && <FocusEditor key={`${focusPhoto.draftId}:${focusedStep.id}:${focusedPhoto.id}`} photo={focusedPhoto} src={urls[focusedPhoto.id]} initial={focusedStep.focusByPhoto?.[focusedPhoto.id]} text={focusedStep.text} language={draft!.language} uiLanguage={language} online={online} close={() => setFocusPhoto(null)} save={region => {
+      const latest = current.current;
+      const step = latest?.steps.find(s => s.id === focusPhoto.stepId && s.photoIds.includes(focusPhoto.photoId));
+      if (latest?.id === focusPhoto.draftId && step && JSON.stringify(step.focusByPhoto?.[focusPhoto.photoId] ?? null) !== JSON.stringify(region)) edit({ steps: latest.steps.map(s => s.id === step.id ? setStepFocus(s, focusPhoto.photoId, region) : s) });
+      setFocusPhoto(null);
+    }} />}
   </div>;
 }
