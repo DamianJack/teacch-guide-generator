@@ -47,8 +47,6 @@ h3,h4 { font-size: 16px; font-weight: 600; }
 .save-status .text-button { min-height: 24px; padding: 0; font-size: 11px; }
 .field { display: flex; flex-direction: column; gap: 8px; margin-bottom: 21px; min-width: 0; font-size: 14px; font-weight: 600; }
 .field input,.field textarea,.field select { font-weight: 400; }
-.instruction-language { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; margin: -2px 0 26px; font-size: 12px; color: var(--muted); }
-.instruction-language select { width: 117px; min-height: 44px; padding: 8px; font-size: 13px; background: transparent; }
 .section-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 14px; }
 .count { color: var(--muted); font-size: 12px; }
 .photo-preview { display: block; padding: 0; width: 100%; height: 135px; border: 0; border-radius: 12px 12px 0 0; background: #edf1e7; }
@@ -128,7 +126,6 @@ summary::-webkit-details-marker { display: none; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border-width: 0; }
 @media(min-width:700px) { .topbar { padding-top: 25px; min-height: 96px; }.workspace-main { padding-top: 10px; }.welcome { padding-top: 75px; }.step-photo .photo-preview { height: 140px; }.page-heading h1 { font-size: 31px; } }
 @media(max-width:360px) { .topbar { padding-inline: 16px; }.brand { font-size: 15px; }.workspace-main { padding-inline: 16px; }.workflow-tabs button { font-size: 11px; gap: 5px; }.action-dock { padding-inline: 16px; gap: 10px; }.action-dock .primary { font-size: 12px; }.detail-status { font-size: 10px; } }
-.instruction-language { margin: -10px 0 22px; justify-content: space-between; }.instruction-language select { border: 0; min-height: 44px; padding: 8px 0 8px 8px; text-align: right; }.action-dock { flex-wrap: wrap; row-gap: 9px; }
 
 /* Dictation stays inside each text field; recording controls appear only on request. */
 .speech-field { position: relative; }

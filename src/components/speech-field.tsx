@@ -60,9 +60,10 @@ function Dictation({ label, value, onChange, maxLength, language, uiLanguage, ro
     setPhase("transcribing"); setError(null); controller.current = new AbortController();
     const form = new FormData(); const type = blob.type.split(";")[0];
     form.set("file", blob, `speech.${type === "audio/mp4" ? "m4a" : type === "audio/ogg" ? "ogg" : "webm"}`); form.set("language", language);
+    // AbortSignal.any is missing on older mobile browsers (iOS Safari < 17.4), so the timeout aborts the same controller.
+    const request = controller.current; const timeout = setTimeout(() => request.abort(), 55_000);
     try {
-      const response = await fetch("/api/transcribe", { method: "POST", body: form,
-        signal: AbortSignal.any([controller.current.signal, AbortSignal.timeout(55_000)]) });
+      const response = await fetch("/api/transcribe", { method: "POST", body: form, signal: request.signal });
       const result = await response.json();
       if (!alive.current) return;
       if (!response.ok) {
@@ -71,14 +72,16 @@ function Dictation({ label, value, onChange, maxLength, language, uiLanguage, ro
       }
       if (typeof result.text !== "string" || !result.text.trim() || result.text.length > 8000) { setError("voiceEmpty"); setPhase("recorded"); return; }
       setTranscript(result.text.trim()); setPhase("review");
-    } catch {
+    } catch (cause) {
+      console.error("[transcribe]", cause);
       if (alive.current) { setError("voiceFailed"); setPhase("recorded"); }
-    }
+    } finally { clearTimeout(timeout); }
   }
   function stop(send = false) {
     submitOnStop.current = send;
-    if (recorder.current?.state === "recording") recorder.current.stop();
-    releaseMicrophone();
+    if (timer.current) clearInterval(timer.current); timer.current = null;
+    // Let the recorder flush its final chunk before the microphone stops; onstop releases it. Safari otherwise truncates the file.
+    if (recorder.current?.state === "recording") recorder.current.stop(); else releaseMicrophone();
   }
   async function start() {
     if (!navigator.onLine) { setError("voiceOffline"); return; }

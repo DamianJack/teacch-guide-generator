@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { build } from "esbuild";
+import { isCrossOrigin } from "../src/lib/origin.ts";
 import { approvalIssues, editDraft, migrateDraft, move, newDraft, sameRevision, generationSchema, usedPhotos } from "../src/lib/guide.ts";
 
 test("approval only requires a photo for every step; edits invalidate it", () => {
@@ -88,4 +89,14 @@ test("AI boundary rejects invalid requests, provider failures and invented photo
     if (originalKey === undefined) delete process.env.FIREWORKS_API_KEY; else process.env.FIREWORKS_API_KEY = originalKey;
     if (originalModel === undefined) delete process.env.AI_MODEL; else process.env.AI_MODEL = originalModel;
   }
+});
+
+test("origin check accepts tunnelled requests for this app and rejects other sites", () => {
+  const request = (headers) => new Request("http://localhost:3000/api/generate", { method: "POST", headers });
+  assert.equal(isCrossOrigin(request({})), false);
+  assert.equal(isCrossOrigin(request({ Origin: "http://localhost:3000" })), false);
+  assert.equal(isCrossOrigin(request({ Origin: "https://abc-3000.euw.devtunnels.ms", "X-Forwarded-Host": "abc-3000.euw.devtunnels.ms" })), false);
+  assert.equal(isCrossOrigin(request({ Origin: "https://evil.example" })), true);
+  assert.equal(isCrossOrigin(request({ Origin: "https://evil.example", "X-Forwarded-Host": "abc-3000.euw.devtunnels.ms" })), true);
+  assert.equal(isCrossOrigin(request({ Origin: "null" })), true);
 });

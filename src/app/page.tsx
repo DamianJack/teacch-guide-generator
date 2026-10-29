@@ -44,6 +44,10 @@ export default function Home() {
     window.addEventListener("online", update); window.addEventListener("offline", update);
     return () => { window.removeEventListener("online", update); window.removeEventListener("offline", update); };
   }, []);
+  // One language switch: the open guide always follows the interface language, including a stored choice restored on load.
+  useEffect(() => {
+    if (started && current.current && current.current.language !== language) edit({ language });
+  }, [language, started]); // eslint-disable-line react-hooks/exhaustive-deps -- edit reads the latest draft from a ref.
   useEffect(() => { document.documentElement.lang = language; try { localStorage.setItem("interface-language", language); } catch { /* Draft storage is independent. */ } }, [language]);
   useEffect(() => {
     let active = true;
@@ -110,7 +114,7 @@ export default function Home() {
     requestBusy.current = true; setBusy(true); setMessage(null);
     try {
       const photoData = await Promise.all(photosInStepOrder(snapshot).map(async p => ({ id: p.id, data: await dataUrl(p.blob) })));
-      const { language, title, notes, materials, noMaterials } = snapshot;
+      const { title, notes, materials, noMaterials } = snapshot;
       const body = JSON.stringify({ facts: { language, title, notes, materials, noMaterials }, photos: photoData, steps: snapshot.steps });
       if (new Blob([body]).size > LIMITS.requestBytes) { setMessage("limitError"); return; }
       const response = await fetch("/api/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body, signal: AbortSignal.timeout(65_000) });
@@ -128,7 +132,6 @@ export default function Home() {
   const issues = draft ? approvalIssues(draft) : [];
   const approved = !!draft && draft.approvedRevision === draft.revision;
   const h = headings[draft?.language ?? "en"];
-  const hasContent = !!draft && (!!draft.title || !!draft.notes || !!draft.materials.length || draft.steps.some(s => !!s.text || !!s.photoIds.length) || draft.noMaterials);
   const speechLanguage = { language: draft?.language ?? "en", uiLanguage: language };
   function stepCard(s: Step, index: number, capture: boolean) {
     const label = `${t.step} ${index + 1}`; const full = photoBusy || draft!.photos.length >= LIMITS.photos;
@@ -187,8 +190,7 @@ export default function Home() {
       {message && <div className="alert" role="alert">{t[message]}</div>}
       {draft.example && <p className="example-note">{t.exampleBadge}</p>}
       {area === 0 && <>
-        <section className="task-fields"><div className="instruction-language" title={hasContent ? t.languageLocked : undefined}><label htmlFor="instruction-language">{t.language}</label><select id="instruction-language" value={draft.language} disabled={hasContent} onChange={e => edit({ language: e.target.value as Language })}><option value="en">English</option><option value="de">Deutsch</option></select></div>
-          <SpeechField {...speechLanguage} label={t.title} maxLength={160} value={draft.title} onChange={value => edit({ title: value })} />
+        <section className="task-fields">          <SpeechField {...speechLanguage} label={t.title} maxLength={160} value={draft.title} onChange={value => edit({ title: value })} />
           <SpeechField {...speechLanguage} label={t.notes} maxLength={5000} rows={3} value={draft.notes} onChange={value => edit({ notes: value })} />
 
         </section>
