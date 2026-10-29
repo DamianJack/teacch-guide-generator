@@ -38,7 +38,9 @@ h3,h4 { font-size: 16px; font-weight: 650; }
   background: linear-gradient(90deg, var(--blue) 0 46%, transparent 46% 54%, var(--green) 54%) top / 100% 46% no-repeat, linear-gradient(90deg, var(--purple) 0 46%, transparent 46% 54%, var(--orange) 54%) bottom / 100% 46% no-repeat; }
 .top-actions { display: flex; align-items: center; gap: 8px; }
 .offline-status { font-size: 12px; font-weight: 600; color: var(--warn-ink); background: var(--warn-bg); padding: 4px 10px; border-radius: 999px; }
-.language-control select { width: 70px; min-height: 44px; padding: 8px 12px; font-size: 13px; font-weight: 700; letter-spacing: .04em; }
+.language-toggle { display: flex; padding: 3px; gap: 2px; border-radius: 8px; background: var(--soft); }
+.language-toggle button { min-height: 40px; min-width: 44px; padding: 0 10px; border: 0; border-radius: 5px; background: transparent; color: var(--muted); font-size: 13px; font-weight: 700; letter-spacing: .04em; }
+.language-toggle button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
 
 /* Start screen */
 .welcome { max-width: 440px; margin: auto; padding: 32px 24px 36px; }
@@ -87,7 +89,10 @@ h3,h4 { font-size: 16px; font-weight: 650; }
 .step-editor { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; margin-bottom: 16px; }
 .step-editor-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
 .step-editor-heading h3 { display: flex; align-items: center; gap: 10px; font-size: 16px; }
-.step-editor-heading button { padding: 8px 14px; min-width: 44px; }
+.step-tools { display: flex; align-items: center; gap: 2px; margin-right: -8px; }
+.step-tools button { display: grid; place-items: center; width: 44px; min-height: 44px; padding: 0; border: 0; border-radius: var(--radius); background: transparent; color: var(--muted); }
+.step-tools button:disabled { opacity: .25; }
+.step-tools .tool-danger { color: var(--danger); }
 .step-number, .learner-step h4 span { display: grid; place-items: center; border-radius: 50%; font-weight: 700; color: #fff; background: var(--blue); }
 .step-number { width: 34px; height: 34px; font-size: 15px; }
 .step-editor:nth-of-type(4n+2) .step-number, .learner-step:nth-of-type(4n+2) h4 span { background: var(--green); }
@@ -97,17 +102,24 @@ h3,h4 { font-size: 16px; font-weight: 650; }
 .step-photo { position: relative; min-width: 0; }
 .photo-preview { display: block; padding: 0; width: 100%; height: 100px; border: 0; border-radius: var(--radius); background: var(--soft); overflow: hidden; }
 .photo-preview img { width: 100%; height: 100%; object-fit: cover; }
-.step-photo .icon-button { position: absolute; top: 4px; right: 4px; min-height: 36px; width: 36px; padding: 0; border-radius: 50%; background: var(--surface); border-color: var(--line); }
+/* 44px hit area with a smaller dark dot, readable on any photo */
+.step-photo .icon-button { position: absolute; top: 0; right: 0; width: 44px; min-height: 44px; padding: 0; border: 0; border-radius: 50%; color: #fff; background: radial-gradient(circle, rgba(36,40,44,.72) 0 14px, transparent 15px); }
+.step-photo .icon-button:hover:not(:disabled) { background: radial-gradient(circle, rgba(36,40,44,.9) 0 14px, transparent 15px); }
+.photo-add { flex-direction: column; justify-content: center; gap: 4px; height: 100px; padding: 6px; border: 1.5px dashed #b9cfe6; background: #f3f8fc; color: var(--blue); font-size: 13px; line-height: 1.2; text-align: center; }
+.photo-add:hover { background: #e9f1f9; }
+.step-photos.empty { grid-template-columns: 1fr; }
+.step-photos.empty .photo-add { height: 120px; font-size: 15px; }
+.file-link { position: relative; display: inline-flex; align-items: center; gap: 8px; min-height: 44px; margin: -4px 0 6px; color: var(--blue); font-size: 14px; font-weight: 600; cursor: pointer; overflow: hidden; }
+.file-link input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.file-link:has(input:disabled) { opacity: .45; cursor: not-allowed; }
+.file-link:focus-within { outline: 3px solid var(--focus); outline-offset: 3px; border-radius: 4px; }
 .upload-buttons { display: flex; gap: 10px; margin-bottom: 16px; }
 .upload-buttons .file-button { flex: 1; padding: 12px 6px; font-size: 14px; justify-content: center; }
-/* Red stays reserved for the single main action in the bottom bar; per-step photo buttons use BBW blue. */
-.upload-buttons .file-button.primary { background: #e1ecf6; border-color: #c5d9ee; color: var(--blue); }
-.upload-buttons .file-button.primary:hover { background: #d3e3f2; }
 .file-button { position: relative; display: inline-flex; align-items: center; overflow: hidden; }
 .file-button input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
 .file-button:focus-within { outline: 3px solid var(--focus); outline-offset: 3px; }
 .step-editor .field { margin-bottom: 14px; font-size: 13px; }
-.step-footer { display: flex; justify-content: space-between; align-items: center; }
+.step-footer { display: flex; justify-content: flex-start; align-items: center; margin-top: -6px; }
 .step-footer button { min-height: 44px; font-size: 14px; }
 .full-width { display: flex; justify-content: center; width: 100%; border-style: dashed; border-color: #cfc9c6; font-size: 15px; background: transparent; }
 
@@ -160,7 +172,10 @@ summary::-webkit-details-marker { display: none; }
 .learner-photos.multiple { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; }
 .learner-photos.multiple img { max-height: 220px; }
 .learner-step p { margin-top: 16px; font-size: 22px; line-height: 1.5; font-weight: 600; white-space: pre-wrap; overflow-wrap: anywhere; }
-.approval-panel { margin-top: 22px; }
+/* The review confirmation sits in a card right above the bottom bar, next to the button it unlocks. */
+.approval-panel { margin-top: 18px; padding: 4px 16px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+.approval-panel:has(.validation) { padding-top: 16px; }
+.primary:disabled { background: #dcd8d6; border-color: #dcd8d6; color: #5a5f64; opacity: 1; }
 .approval-panel>.checkbox-label { font-size: 15px; }
 .approval-status { font-size: 14px; font-weight: 650; color: var(--green); margin-top: 12px; }
 .validation { border-radius: var(--radius); background: var(--warn-bg); border: 1px solid var(--warn-line); color: var(--warn-ink); padding: 18px; margin-bottom: 18px; font-size: 14px; }

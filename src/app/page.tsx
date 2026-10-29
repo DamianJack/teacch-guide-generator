@@ -8,6 +8,14 @@ import { dataUrl, loadDraft, preparePhoto, saveDraft } from "../lib/storage";
 import { copy } from "../lib/copy";
 import { SpeechField } from "../components/speech-field";
 
+const Icon = {
+  up: <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 15l6-6 6 6" /></svg>,
+  down: <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>,
+  trash: <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" /></svg>,
+  camera: <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z" /><circle cx="12" cy="13" r="3.5" /></svg>,
+  gallery: <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3 16l5-5 4 4 3-3 6 6" /></svg>,
+  close: <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>,
+};
 type Message = "imageError" | "photoLimit" | "configured" | "aiError" | "staleResponse" | "limitError" | "pdfError" | "offlineAI";
 function PhotoDialog({ src, alt, label, close }: { src: string; alt: string; label: string; close: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -133,21 +141,20 @@ export default function Home() {
   function stepCard(s: Step, index: number, capture: boolean) {
     const label = `${t.step} ${index + 1}`; const full = photoBusy || draft!.photos.length >= LIMITS.photos;
     return <article className="step-editor" id={`step-${s.id}`} key={s.id}>
-      <div className="step-editor-heading"><h3><span className="step-number">{index + 1}</span>{label}</h3><div className="button-row">{stepButtons(index)}</div></div>
-      {s.photoIds.length > 0 && <div className="step-photos">{s.photoIds.map((pid, pi) => <div className="step-photo" key={pid}>
+      <div className="step-editor-heading"><h3><span className="step-number">{index + 1}</span>{label}</h3><div className="step-tools">{stepButtons(index)}<button type="button" className="tool-danger" aria-label={`${t.remove}: ${label}`} onClick={() => { if (window.confirm(t.deleteStep)) editSteps(draft!.steps.filter(x => x.id !== s.id)); }}>{Icon.trash}</button></div></div>
+      <div className={`step-photos ${s.photoIds.length ? "" : "empty"}`}>{s.photoIds.map((pid, pi) => <div className="step-photo" key={pid}>
         <button className="photo-preview" onClick={() => setViewPhoto(pid)} aria-label={`${t.viewPhoto}: ${label}, ${t.photo} ${pi + 1}`}>{urls[pid] && <img src={urls[pid]} alt={`${label}, ${t.photo} ${pi + 1}`} />}</button>
-        <button className="icon-button danger" aria-label={`${t.remove}: ${label}, ${t.photo} ${pi + 1}`} onClick={() => { if (window.confirm(t.deletePhoto)) editSteps(draft!.steps.map(x => x.id === s.id ? { ...x, photoIds: x.photoIds.filter(other => other !== pid) } : x)); }}>×</button>
-      </div>)}</div>}
-      <div className="upload-buttons">
-        <label className="file-button primary">＋ {s.photoIds.length ? t.cameraMore : t.camera}<input aria-label={`${t.camera}: ${label}`} type="file" accept="image/jpeg,image/png,image/webp" capture="environment" disabled={full} onChange={e => { void upload(e.target.files, s.id); e.target.value = ""; }} /></label>
-        <label className="file-button secondary">{t.choose}<input aria-label={`${t.choose}: ${label}`} type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={full} onChange={e => { void upload(e.target.files, s.id); e.target.value = ""; }} /></label>
+        <button className="icon-button danger" aria-label={`${t.remove}: ${label}, ${t.photo} ${pi + 1}`} onClick={() => { if (window.confirm(t.deletePhoto)) editSteps(draft!.steps.map(x => x.id === s.id ? { ...x, photoIds: x.photoIds.filter(other => other !== pid) } : x)); }}>{Icon.close}</button>
+      </div>)}
+        <label className="photo-add file-button">{Icon.camera}<span>{s.photoIds.length ? t.cameraMore : t.camera}</span><input aria-label={`${t.camera}: ${label}`} type="file" accept="image/jpeg,image/png,image/webp" capture="environment" disabled={full} onChange={e => { void upload(e.target.files, s.id); e.target.value = ""; }} /></label>
       </div>
+      <label className="file-link">{Icon.gallery}{t.choose}<input aria-label={`${t.choose}: ${label}`} type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={full} onChange={e => { void upload(e.target.files, s.id); e.target.value = ""; }} /></label>
       <SpeechField {...speechLanguage} label={`${capture ? t.stepNote : t.action} · ${label}`} maxLength={600} rows={capture ? 2 : 3} value={s.text} onChange={value => edit({ steps: draft!.steps.map(x => x.id === s.id ? { ...x, text: value } : x) })} />
-      <div className="step-footer">{capture ? <span /> : <button className="text-button" disabled={draft!.steps.length >= LIMITS.steps} onClick={() => addStep(index + 1, s.photoIds)}>＋ {t.split}</button>}<button className="text-button danger" onClick={() => { if (window.confirm(t.deleteStep)) editSteps(draft!.steps.filter(x => x.id !== s.id)); }}>{t.remove}</button></div>
+      {!capture && <div className="step-footer"><button className="text-button" disabled={draft!.steps.length >= LIMITS.steps} onClick={() => addStep(index + 1, s.photoIds)}>＋ {t.split}</button></div>}
     </article>;
   }
   function stepButtons(index: number) {
-    return <><button type="button" disabled={index === 0} onClick={() => edit({ steps: move(draft!.steps, index, -1) })} aria-label={`${t.up}: ${t.step} ${index + 1}`}>↑</button><button type="button" disabled={index === draft!.steps.length - 1} onClick={() => edit({ steps: move(draft!.steps, index, 1) })} aria-label={`${t.down}: ${t.step} ${index + 1}`}>↓</button></>;
+    return <><button type="button" disabled={index === 0} onClick={() => edit({ steps: move(draft!.steps, index, -1) })} aria-label={`${t.up}: ${t.step} ${index + 1}`}>{Icon.up}</button><button type="button" disabled={index === draft!.steps.length - 1} onClick={() => edit({ steps: move(draft!.steps, index, 1) })} aria-label={`${t.down}: ${t.step} ${index + 1}`}>{Icon.down}</button></>;
   }
 
   const aiDisabled = !online || busy || photoBusy || !draft?.photos.length;
@@ -166,7 +173,7 @@ export default function Home() {
       <button className="brand" onClick={() => setStarted(false)}><span className="brand-icon" aria-hidden="true">▥</span>{t.brand}</button>
       <div className="top-actions">
         {!online && <span className="offline-status" role="status">{t.offline}</span>}
-        <label className="language-control"><span className="sr-only">{t.uiLanguage}</span><select value={language} onChange={e => setLanguage(e.target.value as Language)}><option value="en">EN</option><option value="de">DE</option></select></label>
+        <div className="language-toggle" role="group" aria-label={t.uiLanguage}>{(["en", "de"] as const).map(l => <button key={l} type="button" aria-pressed={language === l} onClick={() => setLanguage(l)}>{l.toUpperCase()}</button>)}</div>
       </div>
     </header>
     {!ready ? <main className="welcome"><p role="status">{t.loading}</p></main> : !started || !draft ? <main className="welcome">
