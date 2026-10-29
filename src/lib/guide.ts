@@ -3,7 +3,14 @@ import { z } from "zod";
 export type Language = "en" | "de";
 export const LIMITS = { photos: 12, photoBytes: 160_000, requestBytes: 3_500_000, steps: 24 };
 export const materialSchema = z.object({ id: z.string().max(80), name: z.string().max(100), quantity: z.string().max(40), unit: z.string().max(40) });
-export const stepSchema = z.object({ id: z.string().min(1).max(80), text: z.string().max(600), photoIds: z.array(z.string().max(80)).max(LIMITS.photos) });
+export const focusRegionSchema = z.object({
+  x: z.number().min(0).max(1), y: z.number().min(0).max(1),
+  width: z.number().min(0.05).max(1), height: z.number().min(0.05).max(1),
+}).refine(r => r.x + r.width <= 1.000001 && r.y + r.height <= 1.000001, "Focus must fit inside the photo");
+export const focusSuggestionSchema = z.object({ region: focusRegionSchema.nullable() });
+export type FocusRegion = z.infer<typeof focusRegionSchema>;
+export const stepSchema = z.object({ id: z.string().min(1).max(80), text: z.string().max(600), photoIds: z.array(z.string().max(80)).max(LIMITS.photos),
+  focusByPhoto: z.record(z.string().min(1).max(80), focusRegionSchema).optional() });
 export const factsSchema = z.object({
   language: z.enum(["en", "de"]), title: z.string().max(160), notes: z.string().max(5000),
   materials: z.array(materialSchema).max(24), noMaterials: z.boolean(),
@@ -48,6 +55,13 @@ export function migrateDraft(d: Draft): Draft {
 }
 export function editDraft(draft: Draft, patch: Partial<Draft>): Draft {
   return { ...draft, ...patch, revision: draft.revision + 1, approvedRevision: null };
+}
+export function setStepFocus(step: Step, photoId: string, region: FocusRegion | null): Step {
+  if (!step.photoIds.includes(photoId)) throw new Error("Unknown step photo");
+  const focusByPhoto = { ...step.focusByPhoto };
+  if (region) focusByPhoto[photoId] = focusRegionSchema.parse(region);
+  else delete focusByPhoto[photoId];
+  return { ...step, focusByPhoto };
 }
 export function sameRevision(a: Draft, b: Draft) { return a.id === b.id && a.revision === b.revision; }
 export function move<T>(items: T[], index: number, delta: number): T[] {

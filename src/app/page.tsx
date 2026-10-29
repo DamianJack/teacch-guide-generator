@@ -1,12 +1,13 @@
 "use client";
-/* eslint-disable @next/next/no-img-element -- Photos are private local blob URLs, never optimizer requests. */
 /* eslint-disable react-hooks/set-state-in-effect -- Initialize browser preferences and manage object URL lifetimes after hydration. */
 
 import { useEffect, useRef, useState } from "react";
-import { approvalIssues, listedMaterials, showMaterials, editDraft, generationSchema, headings, id, LIMITS, move, newDraft, newStep, photosInStepOrder, sameRevision, usedPhotos, type Draft, type Language, type Step } from "../lib/guide";
+import { approvalIssues, listedMaterials, showMaterials, editDraft, generationSchema, headings, id, LIMITS, move, newDraft, newStep, photosInStepOrder, sameRevision, setStepFocus, usedPhotos, type Draft, type FocusRegion, type Language, type Step } from "../lib/guide";
 import { dataUrl, loadDraft, preparePhoto, saveDraft } from "../lib/storage";
 import { copy } from "../lib/copy";
 import { SpeechField } from "../components/speech-field";
+import { FocusImage } from "../components/focus-image";
+import { FocusEditor } from "../components/focus-editor";
 
 const Icon = {
   up: <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M6 15l6-6 6 6" /></svg>,
@@ -17,10 +18,10 @@ const Icon = {
   close: <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>,
 };
 type Message = "imageError" | "photoLimit" | "configured" | "aiError" | "staleResponse" | "limitError" | "pdfError" | "offlineAI";
-function PhotoDialog({ src, alt, label, close }: { src: string; alt: string; label: string; close: () => void }) {
+function PhotoDialog({ src, alt, label, region, errorLabel, close }: { src: string; alt: string; label: string; region?: FocusRegion; errorLabel: string; close: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null);
   useEffect(() => { dialog.current?.showModal(); }, []);
-  return <dialog ref={dialog} className="photo-modal" aria-label={label} onCancel={close}><button autoFocus onClick={close}>{label} ×</button><img src={src} alt={alt} /></dialog>;
+  return <dialog ref={dialog} className="photo-modal" aria-label={label} onCancel={close}><button autoFocus onClick={close}>{label} ×</button><FocusImage src={src} region={region} alt={alt} errorLabel={errorLabel} /></dialog>;
 }
 function exampleDraft(language: Language) {
   const d = newDraft(language); d.example = true;
@@ -43,7 +44,9 @@ export default function Home() {
   const [message, setMessage] = useState<Message | null>(null);
   const [manual, setManual] = useState(false);
   const [exporting, setExporting] = useState(false); const [photoBusy, setPhotoBusy] = useState(false);
-  const [urls, setUrls] = useState<Record<string, string>>({}); const [viewPhoto, setViewPhoto] = useState<string | null>(null);
+  const [urls, setUrls] = useState<Record<string, string>>({});
+  const [viewPhoto, setViewPhoto] = useState<{ stepId: string; photoId: string } | null>(null);
+  const [focusPhoto, setFocusPhoto] = useState<{ draftId: string; stepId: string; photoId: string } | null>(null);
   const [scrollToStep, setScrollToStep] = useState<string | null>(null);
 
   useEffect(() => {
@@ -143,8 +146,9 @@ export default function Home() {
     return <article className="step-editor" id={`step-${s.id}`} key={s.id}>
       <div className="step-editor-heading"><h3><span className="step-number">{index + 1}</span>{label}</h3><div className="step-tools">{stepButtons(index)}<button type="button" className="tool-danger" aria-label={`${t.remove}: ${label}`} onClick={() => { if (window.confirm(t.deleteStep)) editSteps(draft!.steps.filter(x => x.id !== s.id)); }}>{Icon.trash}</button></div></div>
       <div className={`step-photos ${s.photoIds.length ? "" : "empty"}`}>{s.photoIds.map((pid, pi) => <div className="step-photo" key={pid}>
-        <button className="photo-preview" onClick={() => setViewPhoto(pid)} aria-label={`${t.viewPhoto}: ${label}, ${t.photo} ${pi + 1}`}>{urls[pid] && <img src={urls[pid]} alt={`${label}, ${t.photo} ${pi + 1}`} />}</button>
-        <button className="icon-button danger" aria-label={`${t.remove}: ${label}, ${t.photo} ${pi + 1}`} onClick={() => { if (window.confirm(t.deletePhoto)) editSteps(draft!.steps.map(x => x.id === s.id ? { ...x, photoIds: x.photoIds.filter(other => other !== pid) } : x)); }}>{Icon.close}</button>
+        <button className="photo-preview" onClick={() => setViewPhoto({ stepId: s.id, photoId: pid })} aria-label={`${t.viewPhoto}: ${label}, ${t.photo} ${pi + 1}`}>{urls[pid] && <FocusImage src={urls[pid]} region={s.focusByPhoto?.[pid]} alt={`${label}, ${t.photo} ${pi + 1}`} errorLabel={t.focusImageError} />}</button>
+        <button className="focus-button" disabled={busy || !urls[pid]} aria-label={`${t.focus}: ${label}, ${t.photo} ${pi + 1}`} onClick={() => setFocusPhoto({ draftId: draft!.id, stepId: s.id, photoId: pid })}><span aria-hidden="true">◎</span> {t.focus}{s.focusByPhoto?.[pid] && <span aria-hidden="true"> ✓</span>}</button>
+        <button className="icon-button danger" aria-label={`${t.remove}: ${label}, ${t.photo} ${pi + 1}`} onClick={() => { if (window.confirm(t.deletePhoto)) editSteps(draft!.steps.map(x => x.id === s.id ? { ...setStepFocus(x, pid, null), photoIds: x.photoIds.filter(other => other !== pid) } : x)); }}>{Icon.close}</button>
       </div>)}
         <label className="photo-add file-button">{Icon.camera}<span>{s.photoIds.length ? t.cameraMore : t.camera}</span><input aria-label={`${t.camera}: ${label}`} type="file" accept="image/jpeg,image/png,image/webp" capture="environment" disabled={full} onChange={e => { void upload(e.target.files, s.id); e.target.value = ""; }} /></label>
       </div>
@@ -158,6 +162,8 @@ export default function Home() {
   }
 
   const aiDisabled = !online || busy || photoBusy || !draft?.photos.length;
+  const focusedStep = draft?.id === focusPhoto?.draftId ? draft?.steps.find(s => s.id === focusPhoto?.stepId && s.photoIds.includes(focusPhoto.photoId)) : undefined;
+  const focusedPhoto = focusedStep && draft?.photos.find(p => p.id === focusPhoto?.photoId);
   const canApprove = !issues.length && manual && !photoBusy && !busy;
   async function exportPDF() {
     setExporting(true); setMessage(null);
@@ -223,7 +229,7 @@ export default function Home() {
       {area === 2 && <>
         <article className="learner-preview" lang={draft.language}>
           {draft.title.trim() && <h2>{draft.title}</h2>}{showMaterials(draft) && <section><h3>{h.materials}</h3>{draft.noMaterials ? <p>{h.none}</p> : <ul className="learner-materials">{listedMaterials(draft).map(m => <li key={m.id}><b>{m.quantity} {m.unit}</b> {m.name}</li>)}</ul>}</section>}
-          <section><h3>{h.steps}</h3>{draft.steps.map((s, index) => <div className="learner-step" key={s.id}><h4><span>{index + 1}</span>{h.step} {index + 1}</h4>{s.photoIds.length > 0 && <div className={`learner-photos ${s.photoIds.length > 1 ? "multiple" : ""}`}>{s.photoIds.filter(pid => urls[pid]).map((pid, pi) => <img key={pid} src={urls[pid]} alt={`${h.step} ${index + 1}, ${pi + 1}`} />)}</div>}{s.text.trim() && <p>{s.text}</p>}</div>)}</section>
+          <section><h3>{h.steps}</h3>{draft.steps.map((s, index) => <div className="learner-step" key={s.id}><h4><span>{index + 1}</span>{h.step} {index + 1}</h4>{s.photoIds.length > 0 && <div className={`learner-photos ${s.photoIds.length > 1 ? "multiple" : ""}`}>{s.photoIds.filter(pid => urls[pid]).map((pid, pi) => <FocusImage key={pid} src={urls[pid]} region={s.focusByPhoto?.[pid]} alt={`${h.step} ${index + 1}, ${pi + 1}`} errorLabel={t.focusImageError} />)}</div>}{s.text.trim() && <p>{s.text}</p>}</div>)}</section>
         </article>
         <section className="approval-panel">
           {issues.length > 0 && <div className="validation"><strong>{t.missing}</strong><ul>{issues.map(issue => <li key={issue}>{issueLabels[issue as keyof typeof issueLabels]}</li>)}</ul><button className="text-button" onClick={() => navigate(0)}>{t.fixMissing} →</button></div>}
@@ -236,6 +242,12 @@ export default function Home() {
         {area === 0 ? <><button className="text-button" onClick={() => navigate(1)}>{t.manualEdit}</button><button className="primary" disabled={aiDisabled} onClick={() => void generate()}>{busy ? t.generating : t.generate}<span aria-hidden="true">→</span></button></> : area === 1 ? <><button className="text-button" onClick={() => navigate(0)}>← {t.back}</button><button className="primary" onClick={() => navigate(2)}>{t.preview} <span aria-hidden="true">→</span></button></> : <><button className="text-button" onClick={() => navigate(1)}>← {t.edit}</button>{approved ? <button className="primary" disabled={exporting || saveState !== "saved"} onClick={() => void exportPDF()}>{exporting ? t.exporting : t.download}<span aria-hidden="true">↓</span></button> : <button className="primary" disabled={!canApprove} onClick={() => { const latest = current.current; if (latest && !approvalIssues(latest).length) store({ ...latest, approvedRevision: latest.revision }, false); }}>{t.approve} <span aria-hidden="true">✓</span></button>}</>}
       </div>
     </main>}
-    {viewPhoto && urls[viewPhoto] && <PhotoDialog src={urls[viewPhoto]} alt={draft?.photos.find(p => p.id === viewPhoto)?.name ?? t.photo} label={t.close} close={() => setViewPhoto(null)} />}
+    {viewPhoto && urls[viewPhoto.photoId] && <PhotoDialog src={urls[viewPhoto.photoId]} region={draft?.steps.find(s => s.id === viewPhoto.stepId)?.focusByPhoto?.[viewPhoto.photoId]} alt={draft?.photos.find(p => p.id === viewPhoto.photoId)?.name ?? t.photo} label={t.close} errorLabel={t.focusImageError} close={() => setViewPhoto(null)} />}
+    {focusPhoto && focusedStep && focusedPhoto && urls[focusedPhoto.id] && <FocusEditor key={`${focusPhoto.draftId}:${focusedStep.id}:${focusedPhoto.id}`} photo={focusedPhoto} src={urls[focusedPhoto.id]} initial={focusedStep.focusByPhoto?.[focusedPhoto.id]} text={focusedStep.text} language={draft!.language} uiLanguage={language} online={online} close={() => setFocusPhoto(null)} save={region => {
+      const latest = current.current;
+      const step = latest?.steps.find(s => s.id === focusPhoto.stepId && s.photoIds.includes(focusPhoto.photoId));
+      if (latest?.id === focusPhoto.draftId && step && JSON.stringify(step.focusByPhoto?.[focusPhoto.photoId] ?? null) !== JSON.stringify(region)) edit({ steps: latest.steps.map(s => s.id === step.id ? setStepFocus(s, focusPhoto.photoId, region) : s) });
+      setFocusPhoto(null);
+    }} />}
   </div>;
 }

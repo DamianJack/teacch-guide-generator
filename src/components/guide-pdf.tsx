@@ -2,6 +2,7 @@
 import { Document, Page, Text, View, Image, Svg, Path, StyleSheet, pdf } from "@react-pdf/renderer";
 import { approvalIssues, headings, listedMaterials, showMaterials, type Draft } from "../lib/guide";
 import { dataUrl } from "../lib/storage";
+import { focusImageData, stepPhotoKey } from "../lib/focus";
 
 /*
   Calm, TEACCH-style A4 guide built from the trainer's own photos:
@@ -85,6 +86,7 @@ export function GuideDocument({ draft, images }: { draft: Draft; images: Record<
       {footer}
     </Page>
     {draft.steps.map((s, index) => <Page key={s.id} size="A4" style={styles.page}>
+<<<<<<< Updated upstream
       <View style={styles.band}><View style={styles.bandRow}>
         <View>{!!title && <Text style={styles.eyebrow}>{title}</Text>}<Text style={styles.stepCount}>{h.step} {index + 1} {l.of} {total}</Text></View>
         <Pegs total={total} current={index} />
@@ -98,12 +100,23 @@ export function GuideDocument({ draft, images }: { draft: Draft; images: Record<
         <View style={styles.doneRow} wrap={false}><View style={styles.bigBox} /><Text style={styles.doneText}>{l.done}</Text></View>
       </View>
       {footer}
+=======
+      <Text style={styles.eyebrow}>{draft.title}</Text><Text style={styles.heading}>{h.step} {index + 1}</Text>
+      {s.photoIds.length === 1 ? <Image src={images[stepPhotoKey(s.id, s.photoIds[0])]} style={styles.image} />
+        : <View style={styles.images}>{s.photoIds.map(pid => <Image key={pid} src={images[stepPhotoKey(s.id, pid)]} style={styles.gridImage} />)}</View>}
+      {!!s.text.trim() && <Text style={styles.action}>{s.text}</Text>}{footer}
+>>>>>>> Stashed changes
     </Page>)}
   </Document>;
 }
 export async function downloadGuide(draft: Draft) {
   if (draft.approvedRevision !== draft.revision || approvalIssues(draft).length) throw new Error("approval");
-  const images = Object.fromEntries(await Promise.all(draft.photos.map(async p => [p.id, await dataUrl(p.blob)])));
+  const originals = Object.fromEntries(await Promise.all(draft.photos.map(async p => [p.id, await dataUrl(p.blob)])));
+  const images: Record<string, string> = {};
+  for (const step of draft.steps) for (const pid of step.photoIds) {
+    const region = step.focusByPhoto?.[pid];
+    images[stepPhotoKey(step.id, pid)] = region ? await focusImageData(originals[pid], region) : originals[pid];
+  }
   const blob = await pdf(<GuideDocument draft={draft} images={images} />).toBlob();
   const url = URL.createObjectURL(blob); const a = document.createElement("a");
   a.href = url; a.download = `${draft.title.replace(/[^\p{L}\p{N} _-]/gu, "").slice(0, 80) || "guide"}.pdf`;
