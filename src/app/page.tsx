@@ -6,6 +6,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { approvalIssues, editDraft, generationSchema, headings, id, LIMITS, move, newDraft, reviewSchema, sameRevision, type Draft, type Language } from "../lib/guide";
 import { dataUrl, loadDraft, preparePhoto, saveDraft } from "../lib/storage";
 import { copy } from "../lib/copy";
+import { SpeechField } from "../components/speech-field";
 
 type Message = "imageError" | "photoLimit" | "configured" | "aiError" | "staleResponse" | "limitError" | "pdfError" | "offlineAI";
 function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
@@ -130,8 +131,9 @@ export default function Home() {
   const approved = !!draft && draft.approvedRevision === draft.revision;
   const h = headings[draft?.language ?? "en"];
   const hasContent = !!draft && (!!draft.title || !!draft.notes || !!draft.materials.length || !!draft.photos.length || !!draft.steps.length || !!draft.finished || !!draft.next || !!draft.help || draft.noMaterials);
+  const speechLanguage = { language: draft?.language ?? "en", uiLanguage: language };
   function completionFields() {
-    return <div className="completion-fields">{(["finished", "next", "help"] as const).map(field => <Field key={field} label={t[field]}><textarea maxLength={1000} rows={2} value={draft![field]} onChange={e => edit({ [field]: e.target.value })} /></Field>)}</div>;
+    return <div className="completion-fields">{(["finished", "next", "help"] as const).map(field => <SpeechField {...speechLanguage} key={field} label={t[field]} maxLength={1000} rows={2} value={draft![field]} onChange={value => edit({ [field]: value })} />)}</div>;
   }
   function stepButtons(index: number) {
     return <><button type="button" disabled={index === 0} onClick={() => edit({ steps: move(draft!.steps, index, -1) })} aria-label={`${t.up}: ${t.step} ${index + 1}`}>↑</button><button type="button" disabled={index === draft!.steps.length - 1} onClick={() => edit({ steps: move(draft!.steps, index, 1) })} aria-label={`${t.down}: ${t.step} ${index + 1}`}>↓</button></>;
@@ -176,8 +178,8 @@ export default function Home() {
       {draft.example && <details className="example-note"><summary>{t.exampleBadge}</summary><p>{t.exampleNote}</p></details>}
       {area === 0 && <>
         <section className="task-fields"><div className="instruction-language" title={hasContent ? t.languageLocked : undefined}><label htmlFor="instruction-language">{t.language}</label><select id="instruction-language" value={draft.language} disabled={hasContent} onChange={e => edit({ language: e.target.value as Language })}><option value="en">English</option><option value="de">Deutsch</option></select></div>
-          <Field label={t.title}><input maxLength={160} placeholder={t.titlePlaceholder} value={draft.title} onChange={e => edit({ title: e.target.value })} /></Field>
-          <Field label={t.notes}><textarea maxLength={5000} rows={3} placeholder={t.notesHint} value={draft.notes} onChange={e => edit({ notes: e.target.value })} /></Field>
+          <SpeechField {...speechLanguage} label={t.title} maxLength={160} placeholder={t.titlePlaceholder} value={draft.title} onChange={value => edit({ title: value })} />
+          <SpeechField {...speechLanguage} label={t.notes} maxLength={5000} rows={3} placeholder={t.notesHint} value={draft.notes} onChange={value => edit({ notes: value })} />
 
         </section>
         <section className="photos-section"><div className="section-heading"><h2>{t.photos}</h2><span className="count">{draft.photos.length}/12</span></div>
@@ -199,10 +201,10 @@ export default function Home() {
         <details className="task-details"><summary><span>{t.taskDetails}</span><span className="detail-status">{detailsMissing ? `${detailsMissing} ${t.toComplete}` : "✓"}</span></summary><div className="details-content">
           <div className="subheading"><h3>{t.materials}</h3><label className="checkbox-label"><input type="checkbox" checked={draft.noMaterials} onChange={e => edit({ noMaterials: e.target.checked })} />{t.noMaterials}</label></div>
           {!draft.noMaterials && <><div className="materials-list">{draft.materials.map((m, index) => <div className="material-row" key={m.id}>
-            <Field label={`${t.material} ${index + 1}`}><input value={m.name} maxLength={100} onChange={e => edit({ materials: draft.materials.map(x => x.id === m.id ? { ...x, name: e.target.value } : x) })} /></Field>
+            <SpeechField {...speechLanguage} label={`${t.material} ${index + 1}`} value={m.name} maxLength={100} onChange={value => edit({ materials: draft.materials.map(x => x.id === m.id ? { ...x, name: value } : x) })} />
             <button className="icon-button danger" aria-label={`${t.remove}: ${t.material} ${index + 1}`} onClick={() => edit({ materials: draft.materials.filter(x => x.id !== m.id) })}>×</button>
-            <Field label={t.quantity}><input value={m.quantity} maxLength={40} onChange={e => edit({ materials: draft.materials.map(x => x.id === m.id ? { ...x, quantity: e.target.value } : x) })} /></Field>
-            <Field label={t.unit}><input value={m.unit} maxLength={40} onChange={e => edit({ materials: draft.materials.map(x => x.id === m.id ? { ...x, unit: e.target.value } : x) })} /></Field>
+            <SpeechField {...speechLanguage} label={t.quantity} value={m.quantity} maxLength={40} onChange={value => edit({ materials: draft.materials.map(x => x.id === m.id ? { ...x, quantity: value } : x) })} />
+            <SpeechField {...speechLanguage} label={t.unit} value={m.unit} maxLength={40} onChange={value => edit({ materials: draft.materials.map(x => x.id === m.id ? { ...x, unit: value } : x) })} />
           </div>)}</div><button className="secondary compact" disabled={draft.materials.length >= 24} onClick={() => edit({ materials: [...draft.materials, { id: id(), name: "", quantity: "", unit: "" }] })}>＋ {t.addMaterial}</button></>}
           {completionFields()}
         </div></details>
@@ -215,7 +217,7 @@ export default function Home() {
           <div className="step-editor-heading"><h3><span className="step-number">{index + 1}</span>{t.step} {index + 1}</h3><div className="button-row">{stepButtons(index)}</div></div>
           {s.photoId && urls[s.photoId] && <button className="step-thumb" onClick={() => setViewPhoto(s.photoId)} aria-label={`${t.viewPhoto}: ${t.step} ${index + 1}`}><img src={urls[s.photoId]} alt={`${t.step} ${index + 1}`} /></button>}
           <Field label={`${t.photo} · ${t.step} ${index + 1}`}><select value={s.photoId} onChange={e => edit({ steps: draft.steps.map(x => x.id === s.id ? { ...x, photoId: e.target.value } : x) })}><option value="">{t.noPhoto}</option>{draft.photos.map((p, pi) => <option value={p.id} key={p.id}>{t.photo} {pi + 1} · {p.name}</option>)}</select></Field>
-          <Field label={`${t.action} · ${t.step} ${index + 1}`}><textarea maxLength={600} rows={3} placeholder={t.actionPlaceholder} value={s.text} onChange={e => edit({ steps: draft.steps.map(x => x.id === s.id ? { ...x, text: e.target.value } : x) })} /></Field>
+          <SpeechField {...speechLanguage} label={`${t.action} · ${t.step} ${index + 1}`} maxLength={600} rows={3} placeholder={t.actionPlaceholder} value={s.text} onChange={value => edit({ steps: draft.steps.map(x => x.id === s.id ? { ...x, text: value } : x) })} />
           <div className="step-footer"><button className="text-button" disabled={draft.steps.length >= LIMITS.steps} onClick={() => { const steps = [...draft.steps]; steps.splice(index + 1, 0, { id: id(), text: "", photoId: s.photoId }); edit({ steps }); }}>＋ {t.split}</button><button className="text-button danger" onClick={() => { if (window.confirm(t.deleteStep)) edit({ steps: draft.steps.filter(x => x.id !== s.id) }); }}>{t.remove}</button></div>
         </article>)}
         <button className="secondary full-width" disabled={draft.steps.length >= LIMITS.steps} onClick={() => edit({ steps: [...draft.steps, { id: id(), text: "", photoId: "" }] })}>＋ {t.addStep}</button>
@@ -226,7 +228,7 @@ export default function Home() {
           <p className="hint">{t.consent}</p><div className="button-row"><button className="secondary" disabled={aiDisabled || !draft.steps.length} onClick={() => void ai("check")}>{busy === "check" ? t.checking : t.check}</button><button className="text-button" disabled={aiDisabled} onClick={() => void ai("generate")}>{t.regenerate}</button></div>
         </div></details>
       </>}
-      {draft.questions.length > 0 && area !== 2 && <section className="questions-panel"><h2>{t.questions}</h2>{draft.questions.map((q, index) => <Field label={q.question} key={index}><textarea maxLength={1000} rows={2} placeholder={t.answer} value={q.answer} onChange={e => edit({ questions: draft.questions.map((item, i) => i === index ? { ...item, answer: e.target.value } : item) })} /></Field>)}</section>}
+      {draft.questions.length > 0 && area !== 2 && <section className="questions-panel"><h2>{t.questions}</h2>{draft.questions.map((q, index) => <SpeechField {...speechLanguage} label={q.question} key={index} maxLength={1000} rows={2} placeholder={t.answer} value={q.answer} onChange={value => edit({ questions: draft.questions.map((item, i) => i === index ? { ...item, answer: value } : item) })} />)}</section>}
       {busy && <p className="request-status" role="status">{busy === "generate" ? t.generating : t.checking}</p>}
       {area === 2 && <>
         <article className="learner-preview" lang={draft.language}>

@@ -159,3 +159,25 @@ summary::-webkit-details-marker { display: none; }
 @media(min-width:700px) { .topbar { padding-top: 25px; min-height: 96px; }.workspace-main { padding-top: 10px; }.welcome { padding-top: 75px; }.photo-preview { height: 180px; }.page-heading h1 { font-size: 31px; } }
 @media(max-width:360px) { .topbar { padding-inline: 16px; }.brand { font-size: 15px; }.workspace-main { padding-inline: 16px; }.workflow-tabs button { font-size: 11px; gap: 5px; }.action-dock { padding-inline: 16px; gap: 10px; }.action-dock .primary { font-size: 12px; }.detail-status { font-size: 10px; } }
 .instruction-language { margin: -10px 0 22px; justify-content: space-between; }.instruction-language select { border: 0; min-height: 44px; padding: 8px 0 8px 8px; text-align: right; }.action-dock { flex-wrap: wrap; row-gap: 9px; }.share-note { flex-basis: 100%; font-size: 10px; line-height: 1.4; color: var(--muted); }.action-dock:has(.share-note) { padding-top: 10px; }.workspace-main:has(.share-note) { padding-bottom: calc(140px + env(safe-area-inset-bottom)); }
+/* Dictation stays inside each text field; recording controls appear only on request. */
+.speech-field { position: relative; }
+.field-label-row { display: flex; align-items: center; min-height: 22px; }
+.field-label-row>label { cursor: text; }
+.mic-button { position: absolute; top: 33px; right: 4px; display: grid; place-items: center; width: 44px; height: 44px; min-height: 44px; padding: 9px; border: 0; border-radius: 8px; background: transparent; color: var(--green); }
+.speech-field>input,.speech-field>textarea { padding-right: 51px; }
+.voice-dialog { position: fixed; inset: auto 0 0; margin: 0 auto; padding: 22px 24px calc(24px + env(safe-area-inset-bottom)); width: min(100%,480px); max-height: calc(100dvh - 32px); overflow-y: auto; border: 0; border-radius: 22px 22px 0 0; background: white; color: var(--ink); font-size: 14px; font-weight: 400; box-shadow: 0 -10px 50px #16271d15; }
+.voice-dialog::backdrop { background: #12251e77; }
+.voice-heading { display: flex; justify-content: space-between; align-items: center; gap: 15px; }
+.voice-heading h2 { font-size: 21px; }
+.voice-heading .icon-button { width: 44px; padding: 7px; background: transparent; border: 0; font-size: 25px; }
+.voice-target { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; margin: 2px 0 12px; }
+.voice-privacy { font-size: 12px; color: var(--muted); line-height: 1.6; }
+.voice-error { background: #fff1e5; color: #79452c; border-radius: 9px; padding: 12px; margin-top: 16px; font-size: 13px; }
+.voice-indicator { display: grid; place-items: center; margin: 25px auto 14px; width: 68px; height: 68px; border-radius: 50%; background: #edf3e6; color: var(--green); }
+.voice-indicator svg { width: 29px; height: 29px; }
+.voice-indicator.is-recording { background: #f8e7df; color: #963d2c; outline: 5px solid #fcf2ed; }
+.voice-state { text-align: center; color: var(--muted); font-size: 13px; min-height: 25px; margin-bottom: 20px; }
+.voice-dialog .primary.full-width { border-style: solid; min-height: 52px; }
+.voice-dialog>.text-button { display: block; margin: 10px auto 0; }
+.voice-review { display: flex; flex-direction: column; gap: 9px; font-size: 13px; font-weight: 600; margin: 20px 0; }
+.voice-review textarea { font-weight: 400; }
