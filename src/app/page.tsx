@@ -2,16 +2,13 @@
 /* eslint-disable @next/next/no-img-element -- Photos are private local blob URLs, never optimizer requests. */
 /* eslint-disable react-hooks/set-state-in-effect -- Initialize browser preferences and manage object URL lifetimes after hydration. */
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import { approvalIssues, editDraft, generationSchema, headings, id, LIMITS, move, newDraft, reviewSchema, sameRevision, type Draft, type Language } from "../lib/guide";
+import { useEffect, useRef, useState } from "react";
+import { approvalIssues, listedMaterials, showMaterials, editDraft, generationSchema, headings, id, LIMITS, move, newDraft, newStep, photosInStepOrder, reviewSchema, sameRevision, usedPhotos, type Draft, type Language, type Step } from "../lib/guide";
 import { dataUrl, loadDraft, preparePhoto, saveDraft } from "../lib/storage";
 import { copy } from "../lib/copy";
 import { SpeechField } from "../components/speech-field";
 
 type Message = "imageError" | "photoLimit" | "configured" | "aiError" | "staleResponse" | "limitError" | "pdfError" | "offlineAI";
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return <label className="field"><span>{label}</span>{children}</label>;
-}
 function PhotoDialog({ src, alt, label, close }: { src: string; alt: string; label: string; close: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null);
   useEffect(() => { dialog.current?.showModal(); }, []);
@@ -20,7 +17,9 @@ function PhotoDialog({ src, alt, label, close }: { src: string; alt: string; lab
 function exampleDraft(language: Language) {
   const d = newDraft(language); d.example = true;
   const de = language === "de";
-  return { ...d, title: de ? "Ein Materialset packen" : "Pack one materials kit",
+  const steps = de ? ["Stelle die leere Schachtel auf den Tisch.", "Lege 4 Schrauben hinein.", "Lege 4 Unterlegscheiben hinein.", "Prüfe die Mengen.", "Schließe die Schachtel."]
+    : ["Put the empty box on the table.", "Put 4 screws in the box.", "Put 4 washers in the box.", "Check the amounts.", "Close the box."];
+  return { ...d, steps: steps.map(text => newStep(text)), title: de ? "Ein Materialset packen" : "Pack one materials kit",
     materials: [{ id: id(), name: de ? "Schachtel" : "Box", quantity: "1", unit: de ? "Stück" : "piece" }, { id: id(), name: de ? "Schraube" : "Screw", quantity: "4", unit: de ? "Stück" : "pieces" }, { id: id(), name: de ? "Unterlegscheibe" : "Washer", quantity: "4", unit: de ? "Stück" : "pieces" }],
     notes: de ? "Stelle die leere Schachtel auf den Tisch. Lege 4 Schrauben hinein. Lege 4 Unterlegscheiben hinein. Prüfe die Mengen. Schließe die Schachtel." : "Put the empty box on the table. Put 4 screws in the box. Put 4 washers in the box. Check the amounts. Close the box.",
     finished: de ? "Die geschlossene Schachtel enthält 4 Schrauben und 4 Unterlegscheiben." : "The closed box contains 4 screws and 4 washers.",
@@ -37,9 +36,10 @@ export default function Home() {
   const [retry, setRetry] = useState(0); const saveQueue = useRef(Promise.resolve()); const saveVersion = useRef(0);
   const [online, setOnline] = useState(true); const [busy, setBusy] = useState<"generate" | "check" | null>(null); const requestBusy = useRef(false);
   const [message, setMessage] = useState<Message | null>(null);
-  const [manual, setManual] = useState(false); const [answersReviewed, setAnswersReviewed] = useState(false);
+  const [manual, setManual] = useState(false);
   const [exporting, setExporting] = useState(false); const [photoBusy, setPhotoBusy] = useState(false);
   const [urls, setUrls] = useState<Record<string, string>>({}); const [viewPhoto, setViewPhoto] = useState<string | null>(null);
+  const [scrollToStep, setScrollToStep] = useState<string | null>(null);
 
   useEffect(() => {
     try { const stored = localStorage.getItem("interface-language"); if (stored === "en" || stored === "de") setLanguage(stored); } catch { /* Interface preference is optional. */ }
@@ -67,13 +67,17 @@ export default function Home() {
     return () => Object.values(next).forEach(url => URL.revokeObjectURL(url));
   }, [photos]);
   useEffect(() => {
+    if (!scrollToStep) return;
+    document.getElementById(`step-${scrollToStep}`)?.scrollIntoView({ behavior: "smooth", block: "center" }); setScrollToStep(null);
+  }, [scrollToStep]);
+  useEffect(() => {
     const warn = (event: BeforeUnloadEvent) => { if (saveState !== "saved") event.preventDefault(); };
     window.addEventListener("beforeunload", warn); return () => window.removeEventListener("beforeunload", warn);
   }, [saveState]);
 
   function store(next: Draft, content = true) {
     current.current = next; setSaveState("saving"); setDraft(next);
-    if (content) { setManual(false); setAnswersReviewed(false); }
+    if (content) setManual(false);
   }
   function edit(patch: Partial<Draft>) { if (current.current) store(editDraft(current.current, patch)); }
   function begin(example = false) {
@@ -84,28 +88,35 @@ export default function Home() {
     setArea(next);
     window.scrollTo({ top: 0, behavior: "instant" });
   }
-  async function upload(files: FileList | null, replaceId?: string) {
+  function editSteps(steps: Step[]) { if (current.current) edit({ steps, photos: usedPhotos(current.current.photos, steps) }); }
+  function addStep(at = current.current?.steps.length ?? 0, photoIds: string[] = []) {
+    if (!current.current) return;
+    const step = { ...newStep(), photoIds }; const steps = [...current.current.steps]; steps.splice(at, 0, step);
+    edit({ steps }); setScrollToStep(step.id);
+  }
+  async function upload(files: FileList | null, stepId: string) {
     if (!files?.length || !current.current) return;
     const snapshot = current.current; setPhotoBusy(true); setMessage(null);
-    if (!replaceId && snapshot.photos.length + files.length > LIMITS.photos) { setMessage("photoLimit"); setPhotoBusy(false); return; }
+    if (snapshot.photos.length + files.length > LIMITS.photos) { setMessage("photoLimit"); setPhotoBusy(false); return; }
     try {
-      const prepared = await Promise.all(Array.from(files).map(file => preparePhoto(file, replaceId)));
+      const prepared = await Promise.all(Array.from(files).map(file => preparePhoto(file)));
       const latest = current.current;
-      if (!latest || latest.id !== snapshot.id) return;
-      if (!replaceId && latest.photos.length + prepared.length > LIMITS.photos) { setMessage("photoLimit"); return; }
-      edit({ photos: replaceId ? latest.photos.map(p => p.id === replaceId ? prepared[0] : p) : [...latest.photos, ...prepared] });
+      if (!latest || latest.id !== snapshot.id || !latest.steps.some(s => s.id === stepId)) return;
+      if (latest.photos.length + prepared.length > LIMITS.photos) { setMessage("photoLimit"); return; }
+      edit({ photos: [...latest.photos, ...prepared], steps: latest.steps.map(s => s.id === stepId ? { ...s, photoIds: [...s.photoIds, ...prepared.map(p => p.id)] } : s) });
     } catch { setMessage("imageError"); } finally { setPhotoBusy(false); }
   }
   async function ai(mode: "generate" | "check") {
     const snapshot = current.current;
     if (!snapshot || requestBusy.current || !snapshot.photos.length) return;
     if (!navigator.onLine) { setMessage("offlineAI"); return; }
-    if (mode === "generate" && snapshot.steps.length && !window.confirm(t.regenerateConfirm)) return;
+    // On the Create screen step text is the trainer's input for the AI; afterwards it is edited guide text worth protecting.
+    if (mode === "generate" && area !== 0 && snapshot.steps.some(s => s.text.trim()) && !window.confirm(t.regenerateConfirm)) return;
     requestBusy.current = true; setBusy(mode); setMessage(null);
     try {
-      const photoData = await Promise.all(snapshot.photos.map(async p => ({ id: p.id, data: await dataUrl(p.blob) })));
+      const photoData = await Promise.all(photosInStepOrder(snapshot).map(async p => ({ id: p.id, data: await dataUrl(p.blob) })));
       const { language, title, notes, materials, noMaterials, finished, next, help } = snapshot;
-      const body = JSON.stringify({ facts: { language, title, notes, materials, noMaterials, finished, next, help }, photos: photoData, steps: snapshot.steps, questions: snapshot.questions });
+      const body = JSON.stringify({ facts: { language, title, notes, materials, noMaterials, finished, next, help }, photos: photoData, steps: snapshot.steps });
       if (new Blob([body]).size > LIMITS.requestBytes) { setMessage("limitError"); return; }
       const response = await fetch(`/api/${mode}`, { method: "POST", headers: { "Content-Type": "application/json" }, body, signal: AbortSignal.timeout(65_000) });
       const result = await response.json();
@@ -113,35 +124,47 @@ export default function Home() {
       if (!current.current || !sameRevision(current.current, snapshot)) { setMessage("staleResponse"); return; }
       if (mode === "generate") {
         const generated = generationSchema.parse(result);
-        if (generated.steps.some(s => !snapshot.photos.some(p => p.id === s.photoId))) throw new Error("photo");
-        store(editDraft(snapshot, { ...generated, steps: generated.steps.map(s => ({ ...s, id: id() })), questions: generated.questions.map(question => ({ question, answer: "" })), review: null }));
+        if (generated.steps.some(g => !snapshot.steps.some(s => s.id === g.stepId))) throw new Error("step");
+        const texts = new Map(generated.steps.map(g => [g.stepId, g.text.trim()]));
+        store(editDraft(snapshot, { ...generated, steps: snapshot.steps.map(s => ({ ...s, text: texts.get(s.id) || s.text })), review: null }));
         navigate(1);
       } else {
         const checked = reviewSchema.parse(result);
-        const questions = [...snapshot.questions];
-        for (const question of checked.questions) if (!questions.some(q => q.question === question)) questions.push({ question, answer: "" });
-        if (questions.length > 20) throw new Error("questions");
-        const next = questions.length !== snapshot.questions.length ? editDraft(snapshot, { questions }) : snapshot;
-        store({ ...next, review: { revision: next.revision, suggestions: checked.suggestions.map(s => ({ ...s, dismissed: false })) } }, false);
+        store({ ...snapshot, review: { revision: snapshot.revision, suggestions: checked.suggestions.map(s => ({ ...s, dismissed: false })) } }, false);
       }
     } catch { setMessage("aiError"); } finally { requestBusy.current = false; setBusy(null); }
   }
-  const issueLabels = { title: t.titleMissing, materials: t.materialsMissing, finished: t.finished, next: t.next, help: t.help, steps: t.noSteps, stepContent: t.stepContent, questions: t.questionsMissing };
+  const issueLabels = { steps: t.noSteps, stepContent: t.stepContent };
   const issues = draft ? approvalIssues(draft) : [];
   const approved = !!draft && draft.approvedRevision === draft.revision;
   const h = headings[draft?.language ?? "en"];
-  const hasContent = !!draft && (!!draft.title || !!draft.notes || !!draft.materials.length || !!draft.photos.length || !!draft.steps.length || !!draft.finished || !!draft.next || !!draft.help || draft.noMaterials);
+  const hasContent = !!draft && (!!draft.title || !!draft.notes || !!draft.materials.length || draft.steps.some(s => !!s.text || !!s.photoIds.length) || !!draft.finished || !!draft.next || !!draft.help || draft.noMaterials);
   const speechLanguage = { language: draft?.language ?? "en", uiLanguage: language };
   function completionFields() {
     return <div className="completion-fields">{(["finished", "next", "help"] as const).map(field => <SpeechField {...speechLanguage} key={field} label={t[field]} maxLength={1000} rows={2} value={draft![field]} onChange={value => edit({ [field]: value })} />)}</div>;
+  }
+  function stepCard(s: Step, index: number, capture: boolean) {
+    const label = `${t.step} ${index + 1}`; const full = photoBusy || draft!.photos.length >= LIMITS.photos;
+    return <article className="step-editor" id={`step-${s.id}`} key={s.id}>
+      <div className="step-editor-heading"><h3><span className="step-number">{index + 1}</span>{label}</h3><div className="button-row">{stepButtons(index)}</div></div>
+      {s.photoIds.length > 0 && <div className="step-photos">{s.photoIds.map((pid, pi) => <div className="step-photo" key={pid}>
+        <button className="photo-preview" onClick={() => setViewPhoto(pid)} aria-label={`${t.viewPhoto}: ${label}, ${t.photo} ${pi + 1}`}>{urls[pid] && <img src={urls[pid]} alt={`${label}, ${t.photo} ${pi + 1}`} />}</button>
+        <button className="icon-button danger" aria-label={`${t.remove}: ${label}, ${t.photo} ${pi + 1}`} onClick={() => { if (window.confirm(t.deletePhoto)) editSteps(draft!.steps.map(x => x.id === s.id ? { ...x, photoIds: x.photoIds.filter(other => other !== pid) } : x)); }}>×</button>
+      </div>)}</div>}
+      <div className="upload-buttons">
+        <label className="file-button primary">＋ {s.photoIds.length ? t.cameraMore : t.camera}<input aria-label={`${t.camera}: ${label}`} type="file" accept="image/jpeg,image/png,image/webp" capture="environment" disabled={full} onChange={e => { void upload(e.target.files, s.id); e.target.value = ""; }} /></label>
+        <label className="file-button secondary">{t.choose}<input aria-label={`${t.choose}: ${label}`} type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={full} onChange={e => { void upload(e.target.files, s.id); e.target.value = ""; }} /></label>
+      </div>
+      <SpeechField {...speechLanguage} label={`${capture ? t.stepNote : t.action} · ${label}`} maxLength={600} rows={capture ? 2 : 3} value={s.text} onChange={value => edit({ steps: draft!.steps.map(x => x.id === s.id ? { ...x, text: value } : x) })} />
+      <div className="step-footer">{capture ? <span /> : <button className="text-button" disabled={draft!.steps.length >= LIMITS.steps} onClick={() => addStep(index + 1, s.photoIds)}>＋ {t.split}</button>}<button className="text-button danger" onClick={() => { if (window.confirm(t.deleteStep)) editSteps(draft!.steps.filter(x => x.id !== s.id)); }}>{t.remove}</button></div>
+    </article>;
   }
   function stepButtons(index: number) {
     return <><button type="button" disabled={index === 0} onClick={() => edit({ steps: move(draft!.steps, index, -1) })} aria-label={`${t.up}: ${t.step} ${index + 1}`}>↑</button><button type="button" disabled={index === draft!.steps.length - 1} onClick={() => edit({ steps: move(draft!.steps, index, 1) })} aria-label={`${t.down}: ${t.step} ${index + 1}`}>↓</button></>;
   }
 
   const aiDisabled = !online || !!busy || photoBusy || !draft?.photos.length;
-  const canApprove = !issues.length && manual && (!draft?.questions.length || answersReviewed) && !photoBusy && !busy;
-  const detailsMissing = issues.filter(issue => ["materials", "finished", "next", "help"].includes(issue)).length;
+  const canApprove = !issues.length && manual && !photoBusy && !busy;
   async function exportPDF() {
     setExporting(true); setMessage(null);
     const snapshot = current.current!;
@@ -164,7 +187,7 @@ export default function Home() {
       <h1>{t.welcome}</h1>
       {loadError && <div className="alert" role="alert">{t.loadError}<button onClick={() => { setReady(false); setRetry(n => n + 1); }}>{t.retry}</button></div>}
       <div className="welcome-actions">
-        {draft && <button className="primary" onClick={() => { setStarted(true); navigate(draft.steps.length ? 1 : 0); }}>{t.resume} <span>→</span></button>}
+        {draft && <button className="primary" onClick={() => { setStarted(true); navigate(draft.steps.some(s => s.text.trim()) ? 1 : 0); }}>{t.resume} <span>→</span></button>}
         <button className={draft ? "secondary" : "primary"} onClick={() => begin()}>{t.start}<span>＋</span></button>
         <button className="text-button" onClick={() => begin(true)}>{t.example}</button>
       </div>
@@ -182,21 +205,12 @@ export default function Home() {
           <SpeechField {...speechLanguage} label={t.notes} maxLength={5000} rows={3} value={draft.notes} onChange={value => edit({ notes: value })} />
 
         </section>
-        <section className="photos-section"><div className="section-heading"><h2>{t.photos}</h2><span className="count">{draft.photos.length}/12</span></div>
-          <div className="photo-grid">{draft.photos.map((p, index) => <article className="photo-card" key={p.id}>
-            <button className="photo-preview" aria-label={`${t.viewPhoto} ${index + 1}`} onClick={() => setViewPhoto(p.id)}><img src={urls[p.id]} alt={`${t.photo} ${index + 1}: ${p.name}`} /></button>
-            <div className="photo-card-heading"><span>{t.photo} {index + 1}</span><details className="photo-actions"><summary>{t.editPhoto}</summary><div className="photo-action-list">
-              <div className="button-row"><button aria-label={`${t.up}: ${t.photo} ${index + 1}`} disabled={index === 0} onClick={() => edit({ photos: move(draft.photos, index, -1) })}>↑</button><button aria-label={`${t.down}: ${t.photo} ${index + 1}`} disabled={index === draft.photos.length - 1} onClick={() => edit({ photos: move(draft.photos, index, 1) })}>↓</button></div>
-              <label className="file-button secondary">{t.replace}<input aria-label={`${t.replace}: ${t.photo} ${index + 1}`} type="file" accept="image/jpeg,image/png,image/webp" disabled={photoBusy} onChange={e => { void upload(e.target.files, p.id); e.target.value = ""; }} /></label>
-              <button className="text-button danger" onClick={() => { if (window.confirm(t.deletePhoto)) edit({ photos: draft.photos.filter(x => x.id !== p.id), steps: draft.steps.map(s => s.photoId === p.id ? { ...s, photoId: "" } : s) }); }}>{t.remove}</button>
-            </div></details></div>
-          </article>)}</div>
-          <div className={`photo-upload ${draft.photos.length ? "has-photos" : ""}`}>
-            {!draft.photos.length && <span className="capture-symbol" aria-hidden="true">▧</span>}
-            <div className="upload-buttons"><label className="file-button primary">＋ {t.camera}<input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" disabled={photoBusy || draft.photos.length >= 12} onChange={e => { void upload(e.target.files); e.target.value = ""; }} /></label><label className="file-button secondary">{t.choose}<input type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={photoBusy || draft.photos.length >= 12} onChange={e => { void upload(e.target.files); e.target.value = ""; }} /></label></div>
-          </div>
+        <section className="photos-section"><div className="section-heading"><h2>{t.steps}</h2><span className="count">{draft.photos.length}/{LIMITS.photos} {t.photos}</span></div>
+          <p className="section-hint">{t.stepsHint}</p>
+          {draft.steps.map((s, index) => stepCard(s, index, true))}
+          <button className="secondary full-width" disabled={draft.steps.length >= LIMITS.steps} onClick={() => addStep()}>＋ {t.addStep}</button>
         </section>
-        <details className="task-details"><summary><span>{t.taskDetails}</span><span className="detail-status">{detailsMissing ? `${detailsMissing} ${t.toComplete}` : "✓"}</span></summary><div className="details-content">
+        <details className="task-details"><summary><span>{t.taskDetails}</span><span className="detail-status">{t.optional}</span></summary><div className="details-content">
           <div className="subheading"><h3>{t.materials}</h3><label className="checkbox-label"><input type="checkbox" checked={draft.noMaterials} onChange={e => edit({ noMaterials: e.target.checked })} />{t.noMaterials}</label></div>
           {!draft.noMaterials && <><div className="materials-list">{draft.materials.map((m, index) => <div className="material-row" key={m.id}>
             <SpeechField {...speechLanguage} label={`${t.material} ${index + 1}`} value={m.name} maxLength={100} onChange={value => edit({ materials: draft.materials.map(x => x.id === m.id ? { ...x, name: value } : x) })} />
@@ -210,31 +224,23 @@ export default function Home() {
       </>}
       {area === 1 && <>
         <div className="section-heading"><h2>{t.steps}</h2><span className="count">{draft.steps.length}</span></div>
-        {draft.steps.map((s, index) => <article className="step-editor" key={s.id}>
-          <div className="step-editor-heading"><h3><span className="step-number">{index + 1}</span>{t.step} {index + 1}</h3><div className="button-row">{stepButtons(index)}</div></div>
-          {s.photoId && urls[s.photoId] && <button className="step-thumb" onClick={() => setViewPhoto(s.photoId)} aria-label={`${t.viewPhoto}: ${t.step} ${index + 1}`}><img src={urls[s.photoId]} alt={`${t.step} ${index + 1}`} /></button>}
-          <Field label={`${t.photo} · ${t.step} ${index + 1}`}><select value={s.photoId} onChange={e => edit({ steps: draft.steps.map(x => x.id === s.id ? { ...x, photoId: e.target.value } : x) })}><option value="">{t.noPhoto}</option>{draft.photos.map((p, pi) => <option value={p.id} key={p.id}>{t.photo} {pi + 1} · {p.name}</option>)}</select></Field>
-          <SpeechField {...speechLanguage} label={`${t.action} · ${t.step} ${index + 1}`} maxLength={600} rows={3} value={s.text} onChange={value => edit({ steps: draft.steps.map(x => x.id === s.id ? { ...x, text: value } : x) })} />
-          <div className="step-footer"><button className="text-button" disabled={draft.steps.length >= LIMITS.steps} onClick={() => { const steps = [...draft.steps]; steps.splice(index + 1, 0, { id: id(), text: "", photoId: s.photoId }); edit({ steps }); }}>＋ {t.split}</button><button className="text-button danger" onClick={() => { if (window.confirm(t.deleteStep)) edit({ steps: draft.steps.filter(x => x.id !== s.id) }); }}>{t.remove}</button></div>
-        </article>)}
-        <button className="secondary full-width" disabled={draft.steps.length >= LIMITS.steps} onClick={() => edit({ steps: [...draft.steps, { id: id(), text: "", photoId: "" }] })}>＋ {t.addStep}</button>
+        {draft.steps.map((s, index) => stepCard(s, index, false))}
+        <button className="secondary full-width" disabled={draft.steps.length >= LIMITS.steps} onClick={() => addStep()}>＋ {t.addStep}</button>
         <details className="task-details"><summary>{t.completion}</summary><div className="details-content">{completionFields()}</div></details>
         <details className="ai-tools"><summary><span>{t.check}</span><span className="detail-status">{draft.review && draft.review.revision === draft.revision ? "✓" : ""}</span></summary><div className="details-content">
           {draft.review && (draft.review.revision !== draft.revision ? <p className="stale-note">{t.staleCheck}</p> : <div className="check-results"><strong className="check-success">✓ {t.checked}</strong>{draft.review.suggestions.map((s, index) => <div className={`suggestion ${s.dismissed ? "dismissed" : ""}`} key={index}><b>{draft.steps.findIndex(step => step.id === s.target) >= 0 ? `${t.step} ${draft.steps.findIndex(step => step.id === s.target) + 1}` : t[s.target as "title" | "materials" | "finished" | "next" | "help"]}</b><p>{s.issue}</p><button className="text-button" disabled={s.dismissed} onClick={() => store({ ...draft, review: { ...draft.review!, suggestions: draft.review!.suggestions.map((item, i) => i === index ? { ...item, dismissed: true } : item) } }, false)}>{s.dismissed ? t.dismissed : t.dismiss}</button></div>)}</div>)}
           <div className="button-row"><button className="secondary" disabled={aiDisabled || !draft.steps.length} onClick={() => void ai("check")}>{busy === "check" ? t.checking : t.check}</button><button className="text-button" disabled={aiDisabled} onClick={() => void ai("generate")}>{t.regenerate}</button></div>
         </div></details>
       </>}
-      {draft.questions.length > 0 && area !== 2 && <section className="questions-panel"><h2>{t.questions}</h2>{draft.questions.map((q, index) => <SpeechField {...speechLanguage} label={q.question} key={index} maxLength={1000} rows={2} value={q.answer} onChange={value => edit({ questions: draft.questions.map((item, i) => i === index ? { ...item, answer: value } : item) })} />)}</section>}
       {busy && <p className="request-status" role="status">{busy === "generate" ? t.generating : t.checking}</p>}
       {area === 2 && <>
         <article className="learner-preview" lang={draft.language}>
-          <h2>{draft.title || "—"}</h2><section><h3>{h.materials}</h3>{draft.noMaterials ? <p>{h.none}</p> : <ul className="learner-materials">{draft.materials.map(m => <li key={m.id}><b>{m.quantity} {m.unit}</b> {m.name}</li>)}</ul>}</section>
-          <section><h3>{h.steps}</h3>{draft.steps.map((s, index) => <div className="learner-step" key={s.id}><h4><span>{index + 1}</span>{h.step} {index + 1}</h4>{urls[s.photoId] && <img src={urls[s.photoId]} alt={`${h.step} ${index + 1}`} />}<p>{s.text || "—"}</p></div>)}</section>
-          <div className="learner-completion">{(["finished", "next", "help"] as const).map(field => <section key={field}><h3>{h[field]}</h3><p>{draft[field] || "—"}</p></section>)}</div>
+          {draft.title.trim() && <h2>{draft.title}</h2>}{showMaterials(draft) && <section><h3>{h.materials}</h3>{draft.noMaterials ? <p>{h.none}</p> : <ul className="learner-materials">{listedMaterials(draft).map(m => <li key={m.id}><b>{m.quantity} {m.unit}</b> {m.name}</li>)}</ul>}</section>}
+          <section><h3>{h.steps}</h3>{draft.steps.map((s, index) => <div className="learner-step" key={s.id}><h4><span>{index + 1}</span>{h.step} {index + 1}</h4>{s.photoIds.length > 0 && <div className={`learner-photos ${s.photoIds.length > 1 ? "multiple" : ""}`}>{s.photoIds.filter(pid => urls[pid]).map((pid, pi) => <img key={pid} src={urls[pid]} alt={`${h.step} ${index + 1}, ${pi + 1}`} />)}</div>}{s.text.trim() && <p>{s.text}</p>}</div>)}</section>
+          <div className="learner-completion">{(["finished", "next", "help"] as const).filter(field => draft[field].trim()).map(field => <section key={field}><h3>{h[field]}</h3><p>{draft[field]}</p></section>)}</div>
         </article>
         <section className="approval-panel">
-          {issues.length > 0 && <div className="validation"><strong>{t.missing}</strong><ul>{issues.map(issue => <li key={issue}>{issueLabels[issue as keyof typeof issueLabels]}</li>)}</ul><button className="text-button" onClick={() => navigate(issues.some(issue => ["steps", "stepContent", "questions"].includes(issue)) ? 1 : 0)}>{t.fixMissing} →</button></div>}
-          {draft.questions.length > 0 && <label className="checkbox-label"><input type="checkbox" checked={answersReviewed} onChange={e => setAnswersReviewed(e.target.checked)} />{t.confirmAnswers}</label>}
+          {issues.length > 0 && <div className="validation"><strong>{t.missing}</strong><ul>{issues.map(issue => <li key={issue}>{issueLabels[issue as keyof typeof issueLabels]}</li>)}</ul><button className="text-button" onClick={() => navigate(0)}>{t.fixMissing} →</button></div>}
           <label className="checkbox-label"><input type="checkbox" checked={manual || approved} disabled={approved} onChange={e => setManual(e.target.checked)} />{t.manual}</label>
           {approved && <p className="approval-status">✓ {t.approved}</p>}
         </section>

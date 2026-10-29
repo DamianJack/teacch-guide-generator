@@ -1,11 +1,11 @@
 import Dexie, { type Table } from "dexie";
 import type { Draft, Photo } from "./guide";
-import { id, LIMITS } from "./guide";
+import { id, LIMITS, migrateDraft } from "./guide";
 
 const db = new Dexie("work-instructions");
 db.version(1).stores({ drafts: "key" });
 const drafts = db.table("drafts") as Table<{ key: string; draft: Draft }>;
-export async function loadDraft() { return (await drafts.get("current"))?.draft ?? null; }
+export async function loadDraft() { const draft = (await drafts.get("current"))?.draft; return draft ? migrateDraft(draft) : null; }
 // A single record commits facts and photo blobs together or leaves the previous save intact.
 export async function saveDraft(draft: Draft) { await drafts.put({ key: "current", draft }); }
 export function dataUrl(blob: Blob): Promise<string> {

@@ -1,16 +1,18 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { build } from "esbuild";
-import { approvalIssues, editDraft, move, newDraft, sameRevision, generationSchema } from "../src/lib/guide.ts";
+import { approvalIssues, editDraft, migrateDraft, move, newDraft, sameRevision, generationSchema, usedPhotos } from "../src/lib/guide.ts";
 
-test("approval requires facts, quantities, action photos and answered questions; edits invalidate it", () => {
+test("approval only requires a photo for every step; edits invalidate it", () => {
   const d = { ...newDraft(), title: "Pack a kit", materials: [{ id: "m", name: "Screw", quantity: "4", unit: "pieces" }],
-    photos: [{ id: "p", name: "kit.jpg", blob: new Blob(["photo"]) }], steps: [{ id: "s", text: "Put 4 screws in the box.", photoId: "p" }],
+    photos: [{ id: "p", name: "kit.jpg", blob: new Blob(["photo"]) }], steps: [{ id: "s", text: "Put 4 screws in the box.", photoIds: ["p"] }],
     finished: "The box has 4 screws.", next: "Take a break.", help: "Ask the trainer." };
   assert.deepEqual(approvalIssues(d), []);
-  assert.ok(approvalIssues({ ...d, materials: [{ ...d.materials[0], quantity: "" }] }).includes("materials"));
-  assert.ok(approvalIssues({ ...d, steps: [{ ...d.steps[0], photoId: "missing" }] }).includes("stepContent"));
-  assert.ok(approvalIssues({ ...d, questions: [{ question: "How many?", answer: " " }] }).includes("questions"));
+  assert.deepEqual(approvalIssues({ ...d, title: "", materials: [], finished: "", next: "", help: "", steps: [{ ...d.steps[0], text: "" }] }), []);
+  assert.ok(approvalIssues({ ...d, steps: [] }).includes("steps"));
+  assert.ok(approvalIssues({ ...d, steps: [{ ...d.steps[0], photoIds: ["missing"] }] }).includes("stepContent"));
+  assert.ok(approvalIssues({ ...d, steps: [{ ...d.steps[0], photoIds: [] }] }).includes("stepContent"));
+  assert.deepEqual(approvalIssues({ ...d, photos: [...d.photos, { id: "q", name: "b.jpg", blob: new Blob(["b"]) }], steps: [{ ...d.steps[0], photoIds: ["p", "q"] }] }), []);
   assert.deepEqual(approvalIssues({ ...d, noMaterials: true, materials: [] }), []);
   const approved = { ...d, approvedRevision: d.revision, review: { revision: d.revision, suggestions: [] } };
   const changed = editDraft(approved, { title: "Updated task" });
@@ -21,10 +23,22 @@ test("approval requires facts, quantities, action photos and answered questions;
 });
 
 test("ordering preserves stable photo associations and structured output rejects empty steps", () => {
-  const steps = [{ id: "s1", photoId: "p1" }, { id: "s2", photoId: "p2" }];
+  const steps = [{ id: "s1", photoIds: ["p1"] }, { id: "s2", photoIds: ["p2", "p3"] }];
   assert.deepEqual(move(steps, 0, 1), [steps[1], steps[0]]);
   assert.deepEqual(move(steps, 0, -1), steps);
-  assert.equal(generationSchema.safeParse({ steps: [], finished: "", next: "", help: "", questions: [] }).success, false);
+  assert.equal(generationSchema.safeParse({ steps: [], finished: "", next: "", help: "" }).success, false);
+  assert.equal(newDraft().steps.length, 1);
+  const photo = id => ({ id, name: `${id}.jpg`, blob: new Blob([id]) });
+  assert.deepEqual(usedPhotos([photo("p1"), photo("p2"), photo("p3")], [steps[1]]).map(p => p.id), ["p2", "p3"]);
+});
+
+test("drafts saved with one photo per step migrate to step-owned photo lists", () => {
+  const legacy = { ...newDraft(), photos: [{ id: "p1" }, { id: "p2" }, { id: "p3" }],
+    steps: [{ id: "s1", text: "A", photoId: "p1" }, { id: "s2", text: "B", photoId: "" }] };
+  const migrated = migrateDraft(legacy);
+  assert.deepEqual(migrated.steps.slice(0, 2), [{ id: "s1", text: "A", photoIds: ["p1"] }, { id: "s2", text: "B", photoIds: [] }]);
+  assert.deepEqual(migrated.steps.slice(2).map(s => s.photoIds), [["p2"], ["p3"]]);
+  assert.deepEqual(migrateDraft({ ...legacy, photos: [], steps: [] }).steps.map(s => s.photoIds), [[]]);
 });
 
 test("AI boundary rejects invalid requests, provider failures and invented photo references", async () => {
@@ -34,14 +48,16 @@ test("AI boundary rejects invalid requests, provider failures and invented photo
   const originalKey = process.env.FIREWORKS_API_KEY; const originalModel = process.env.AI_MODEL;
   const request = body => new Request("http://localhost/api/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   const input = { facts: { language: "de", title: "Set packen", notes: "", materials: [], noMaterials: true, finished: "", next: "", help: "" },
-    steps: [], questions: [], photos: [{ id: "photo-1", data: "data:image/jpeg;base64,/9j/2Q==" }] };
+    steps: [{ id: "step-1", text: "", photoIds: ["photo-1"] }], photos: [{ id: "photo-1", data: "data:image/jpeg;base64,/9j/2Q==" }] };
   try {
     assert.equal((await handleAI(request({}), "generate")).status, 400);
+    assert.equal((await handleAI(request({ ...input, steps: [{ ...input.steps[0], photoIds: [] }] }), "generate")).status, 400);
+    assert.equal((await handleAI(request({ ...input, steps: [{ ...input.steps[0], photoIds: ["invented"] }] }), "generate")).status, 400);
     assert.equal((await handleAI(new Request("http://localhost/api/generate", { method: "POST", headers: { "Content-Type": "application/json", "Content-Length": "4000000" }, body: "{}" }), "generate")).status, 413);
     delete process.env.FIREWORKS_API_KEY; delete process.env.AI_MODEL;
     assert.equal((await handleAI(request(input), "generate")).status, 503);
     process.env.FIREWORKS_API_KEY = "test-key"; process.env.AI_MODEL = "accounts/fireworks/models/deepseek-v4p1-flash";
-    let output = { steps: [{ text: "Set packen", photoId: "photo-1" }], finished: "", next: "", help: "", questions: ["Was gehört in das Set?"] };
+    let output = { steps: [{ stepId: "step-1", text: "Set packen" }], finished: "", next: "", help: "" };
     let finishReason = "stop";
     globalThis.fetch = async (url, options) => {
       assert.equal(url, "https://api.fireworks.ai/inference/v1/chat/completions");
@@ -51,11 +67,12 @@ test("AI boundary rejects invalid requests, provider failures and invented photo
       assert.equal(sent.response_format.type, "json_schema");
       assert.equal(sent.response_format.json_schema.schema.additionalProperties, false);
       const properties = sent.response_format.json_schema.schema.properties;
-      if (properties.steps) assert.deepEqual(properties.steps.items.properties.photoId.enum, ["photo-1"]);
-      else assert.deepEqual(properties.suggestions.items.properties.target.enum, ["title", "materials", "finished", "next", "help"]);
+      if (properties.steps) assert.deepEqual(properties.steps.items.properties.stepId.enum, ["step-1"]);
+      else assert.deepEqual(properties.suggestions.items.properties.target.enum, ["title", "materials", "finished", "next", "help", "step-1"]);
       assert.match(sent.messages[0].content, /German/);
-      assert.equal(sent.messages[1].content[2].type, "image_url");
-      assert.equal(sent.messages[1].content[2].image_url.url, input.photos[0].data);
+      assert.match(sent.messages[1].content[1].text, /Step 1 \(step identifier: step-1\)/);
+      assert.equal(sent.messages[1].content[3].type, "image_url");
+      assert.equal(sent.messages[1].content[3].image_url.url, input.photos[0].data);
       return Response.json({ choices: [{ finish_reason: finishReason, message: { content: JSON.stringify(output) } }] });
     };
     const success = await handleAI(request(input), "generate");
@@ -63,9 +80,9 @@ test("AI boundary rejects invalid requests, provider failures and invented photo
     finishReason = "length";
     assert.equal((await handleAI(request(input), "generate")).status, 502);
     finishReason = "stop";
-    output = { ...output, steps: [{ text: "Do something", photoId: "invented" }] };
+    output = { ...output, steps: [{ stepId: "invented", text: "Do something" }] };
     assert.equal((await handleAI(request(input), "generate")).status, 502);
-    output = { suggestions: [{ target: "help", issue: "Hilfe ergänzen." }], questions: ["Wer hilft?"] };
+    output = { suggestions: [{ target: "help", issue: "Hilfe ergänzen." }] };
     const checked = await handleAI(request(input), "check");
     assert.equal(checked.status, 200); assert.deepEqual(await checked.json(), output);
     globalThis.fetch = async () => new Response(null, { status: 401 });

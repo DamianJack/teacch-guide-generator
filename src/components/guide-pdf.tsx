@@ -1,5 +1,6 @@
+/* eslint-disable jsx-a11y/alt-text -- React PDF Image is not an HTML element. */
 import { Document, Page, Text, View, Image, StyleSheet, pdf } from "@react-pdf/renderer";
-import { approvalIssues, headings, type Draft } from "../lib/guide";
+import { approvalIssues, headings, listedMaterials, showMaterials, type Draft } from "../lib/guide";
 import { dataUrl } from "../lib/storage";
 
 const styles = StyleSheet.create({
@@ -8,25 +9,28 @@ const styles = StyleSheet.create({
   title: { fontSize: 28, fontFamily: "Helvetica-Bold", marginBottom: 28 },
   heading: { fontSize: 17, fontFamily: "Helvetica-Bold", marginBottom: 10, marginTop: 18 },
   material: { marginBottom: 8 }, image: { width: "100%", height: 320, objectFit: "contain", marginBottom: 20 },
+  images: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", marginBottom: 12 }, gridImage: { width: "49%", height: 160, objectFit: "contain", marginBottom: 8 },
   action: { fontSize: 20, lineHeight: 1.5 }, footer: { position: "absolute", bottom: 25, left: 42, right: 42, fontSize: 10, color: "#50635b" },
 });
 export function GuideDocument({ draft, images }: { draft: Draft; images: Record<string, string> }) {
   const h = headings[draft.language];
+  const completion = (["finished", "next", "help"] as const).filter(field => draft[field].trim());
   const footer = <Text fixed style={styles.footer} render={({ pageNumber, totalPages }) => `${h.page} ${pageNumber} / ${totalPages}`} />;
   return <Document title={draft.title} language={draft.language} author="Visual Guide">
-    <Page size="A4" style={styles.page}>
-      <Text style={styles.eyebrow}>{h.goal}</Text><Text style={styles.title}>{draft.title}</Text>
-      <Text style={styles.heading} minPresenceAhead={50}>{h.materials}</Text>
-      {draft.noMaterials ? <Text>{h.none}</Text> : draft.materials.map(m => <Text key={m.id} style={styles.material}>{m.quantity} {m.unit} · {m.name}</Text>)}{footer}
-    </Page>
+    {(!!draft.title.trim() || showMaterials(draft)) && <Page size="A4" style={styles.page}>
+      {!!draft.title.trim() && <><Text style={styles.eyebrow}>{h.goal}</Text><Text style={styles.title}>{draft.title}</Text></>}
+      {showMaterials(draft) && <><Text style={styles.heading} minPresenceAhead={50}>{h.materials}</Text>
+        {draft.noMaterials ? <Text>{h.none}</Text> : listedMaterials(draft).map(m => <Text key={m.id} style={styles.material}>{m.quantity} {m.unit} · {m.name}</Text>)}</>}{footer}
+    </Page>}
     {draft.steps.map((s, index) => <Page key={s.id} size="A4" style={styles.page}>
       <Text style={styles.eyebrow}>{draft.title}</Text><Text style={styles.heading}>{h.step} {index + 1}</Text>
-      {/* eslint-disable-next-line jsx-a11y/alt-text -- React PDF Image is not an HTML element. */}
-      <Image src={images[s.photoId]} style={styles.image} /><Text style={styles.action}>{s.text}</Text>{footer}
+      {s.photoIds.length === 1 ? <Image src={images[s.photoIds[0]]} style={styles.image} />
+        : <View style={styles.images}>{s.photoIds.map(pid => <Image key={pid} src={images[pid]} style={styles.gridImage} />)}</View>}
+      {!!s.text.trim() && <Text style={styles.action}>{s.text}</Text>}{footer}
     </Page>)}
-    <Page size="A4" style={styles.page}>
-      {(["finished", "next", "help"] as const).map(field => <View key={field}><Text style={styles.heading} minPresenceAhead={60}>{h[field]}</Text><Text>{draft[field]}</Text></View>)}{footer}
-    </Page>
+    {completion.length > 0 && <Page size="A4" style={styles.page}>
+      {completion.map(field => <View key={field}><Text style={styles.heading} minPresenceAhead={60}>{h[field]}</Text><Text>{draft[field]}</Text></View>)}{footer}
+    </Page>}
   </Document>;
 }
 export async function downloadGuide(draft: Draft) {
