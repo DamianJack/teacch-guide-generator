@@ -8,3 +8,6 @@ out/
 public/sw.js*
 public/swe-worker-*.js*
 npm-debug.log*
+
+# macOS
+.DS_Store
